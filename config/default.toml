@@ -1,0 +1,11 @@
+lr = 1
+batch_size = 32
+num_workers = 4
+n_learners = 10
+n_aggregators = 1
+n_rounds = 10
+n_epochs = 10
+
+[db]
+path = 'result.db'
+reset= false
