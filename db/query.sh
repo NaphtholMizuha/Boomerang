@@ -1,1 +1,1 @@
-duckdb --readonly result.duckdb 'select * from fedavg;'
+duckdb --readonly ../result.db 'select * from fedavg;'

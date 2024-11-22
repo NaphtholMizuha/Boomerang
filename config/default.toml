@@ -1,11 +1,19 @@
-lr = 1
-batch_size = 32
-num_workers = 4
+algorithm = 'fedavg'
 n_learners = 10
 n_aggregators = 1
 n_rounds = 10
+split = 'iid'
+
+[local]
+dataset = 'cifar10'
+model = 'cnn'
+datapath = '~/data'
+device = 'cuda'
 n_epochs = 10
+lr = 0.005
+batch_size = 32
+num_workers = 4
 
 [db]
 path = 'result.db'
-reset= false
+reset = true
