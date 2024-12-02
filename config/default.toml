@@ -1,6 +1,8 @@
-algorithm = 'fedavg'
+algorithm = 'feddpr'
 n_learners = 20
 n_aggregators = 10
+n_malicious_learners = 2
+attack_type = 'gradient-flipped'
 n_rounds = 40
 split = 'iid'
 penalty = 0.8
