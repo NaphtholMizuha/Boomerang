@@ -1,19 +1,20 @@
 algorithm = 'fedavg'
-n_learners = 10
-n_aggregators = 1
-n_rounds = 10
+n_learners = 20
+n_aggregators = 10
+n_rounds = 40
 split = 'iid'
+penalty = 0.8
 
 [local]
 dataset = 'cifar10'
 model = 'cnn'
 datapath = '~/data'
 device = 'cuda'
-n_epochs = 10
-lr = 0.005
+n_epochs = 5
+lr = 0.01
 batch_size = 32
-num_workers = 4
+num_workers = 2
 
 [db]
-path = 'result.db'
+path = 'db/result.db'
 reset = true

@@ -23,6 +23,7 @@ class Config:
     algorithm: Literal['fedavg', 'feddpr']
     local: LocalConfig
     split: str
+    penalty: float
     n_learners: int
     n_aggregators: int
     n_rounds: int

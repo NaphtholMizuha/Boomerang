@@ -2,7 +2,6 @@ from feddpr.config import Config, DBConfig, LocalConfig
 from feddpr.training import Trainer, fetch_dataset, fetch_datasplitter, fetch_model
 from feddpr.peer import Aggregator, Learner
 from copy import deepcopy
-from datetime import datetime
 import duckdb    
 
 class Algorithm:
@@ -14,19 +13,17 @@ class Algorithm:
         self.n_learners: int = cfg.n_learners
         self.n_aggregators: int = cfg.n_aggregators
         self.n_rounds: int = cfg.n_rounds
+        self.penalty: float = cfg.penalty
         
         with duckdb.connect(self.db.path) as con:
             if self.db.reset:
-                con.execute(f"DROP TABLE IF EXISTS {cfg.algorithm}")
-            sql = f"""
-                CREATE TABLE IF NOT EXISTS {cfg.algorithm} (
-                    rec_time TIMESTAMP NOT NULL,
-                    rnd INT NOT NULL,
-                    loss FLOAT NOT NULL,
-                    acc FLOAT NOT NULL,
-                )"""
-            con.execute(sql)
-            
+                with open(f'db/reset/{cfg.algorithm}.sql', 'r') as f:
+                    sql = f.read()
+                    con.execute(sql)
+            with open(f'db/create/{cfg.algorithm}.sql', 'r') as f:
+                    sql = f.read()
+                    con.execute(sql)
+                    
         models = [
             fetch_model(self.local.model).to(self.local.device)
             for _ in range(self.n_learners)
@@ -50,23 +47,27 @@ class Algorithm:
                 n_epoch=self.local.n_epochs,
                 init_state=deepcopy(models[i].state_dict()),
                 trainer=trainers[i],
+                n_aggregator=self.n_aggregators
             )
             for i in range(self.n_learners)
         ]
+        
+        # set two learners as malicous, which perform the gradient reverse attack
+        for i in range(2):
+            self.learners[i].set_malicious()
 
-        self.aggregator = Aggregator(self.n_learners)
+        self.aggregators = [
+            Aggregator(
+                n_learners=self.n_learners,
+                penalty=self.penalty
+            )
+            for i in range(self.n_aggregators)
+        ]
+        
+    def run_a_round(self, r):
+        raise NotImplementedError()
         
     def run(self):
         for r in range(self.n_rounds):
-            print(f"Round {r+1}/{self.n_rounds}")
-        
-            loss, acc = self.run_inner()
-
-            with duckdb.connect(self.db.path) as con:
-                con.execute(
-                    f"INSERT INTO {self.algorithm} VALUES (?, ?, ?, ?)",
-                    [datetime.now(), r, loss, acc],
-                )
-    
-    def run_inner(self):
-        pass #TODO
+            print(f"Round {r+1}/{self.n_rounds} its me")
+            self.run_a_round(r)

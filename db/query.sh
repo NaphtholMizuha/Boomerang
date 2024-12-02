@@ -1,1 +1,0 @@
-duckdb --readonly ../result.db 'select * from fedavg;'
