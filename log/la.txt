@@ -1253,3 +1253,10 @@ Learner 6 finished training
 Learner 7 finished training
 Learner 8 finished training
 Learner 9 finished training
+Learner 10 finished training
+Learner 11 finished training
+Learner 12 finished training
+Learner 13 finished training
+Learner 14 finished training
+Learner 15 finished training
+Learner 16 finished training
