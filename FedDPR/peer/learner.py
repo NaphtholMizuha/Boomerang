@@ -84,20 +84,18 @@ class Learner:
                 f"Excepted a 2D array for grads, but got {grads.ndim}D array."
             )
 
-        product = np.dot(grads, g_local)
-
-        norm1 = np.linalg.norm(grads, axis=1)
+        product = np.dot(grads.transpose(), g_local)
+        norm1 = np.linalg.norm(grads, axis=0)
         norm2 = np.linalg.norm(g_local)
         self.rev_scores = product / (norm1 * norm2)
         self.coeff = normalize((self.rev_scores + 1) / 2)
+        # self.coeff = np.ones(self.n_aggregator) / self.n_aggregator
 
     def get_rev_scores(self) -> np.array:
         return self.rev_scores
 
     def set_grads(self, grads: np.ndarray):
-        grads = grads.transpose()
-        # self.set_grad(grads.dot(self.coeff))
-        self.set_grad(grads.dot(np.ones(self.n_aggregator) / self.n_aggregator))
+        self.set_grad(grads.dot(self.coeff))
 
 class GradientFlippedLearner(Learner):
     def __init__(self, n_epoch: int, init_state: Dict, trainer: Trainer, n_aggregator: int) -> None:

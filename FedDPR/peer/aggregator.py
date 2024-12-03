@@ -20,16 +20,14 @@ class Aggregator:
 
     def aggregate(self, grads: List[np.ndarray]) -> np.ndarray:
         grad = np.vstack(grads).transpose()
-
         grad = grad.dot(self.weights)
-        # grad = grad.dot(
-        #     np.ones(self.n_learners) / self.n_learners
-        # )  # uncommented this line for disabling L -> A score-weighting
+
 
         return grad
 
     def score_learners(self, rev_scores: np.ndarray):
-        pred = z_score_outliers(rev_scores)
+        pred = z_score_outliers(rev_scores, 2)
         factor = np.where(pred, self.penalty, 1)
         self.fwd_scores *= factor
         self.weights = self.fwd_scores / self.fwd_scores.sum()
+        # self.weights = np.ones(self.n_learners) / self.n_learners # uncomment this line for disabling learner scoring

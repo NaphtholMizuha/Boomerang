@@ -1,8 +1,8 @@
-from sklearn.ensemble import IsolationForest
 import numpy as np
 
-x = np.array([1,1.1,1,1,1,1,0.9,1,1,1]).reshape((-1, 1))
+grads = np.random.randint(1, 50, (4, 3))
+weight = np.random.random(3)
 
-clf = IsolationForest()
-clf.fit(x)
-print(clf.predict(x))
+print(grads)
+print(weight)
+print(grads.dot(weight))

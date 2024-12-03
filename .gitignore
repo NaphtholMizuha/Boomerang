@@ -1,17 +1,6 @@
 # Python-generated files
 __pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
 log/
-*.egg-info
-
-# Virtual environments
-.venv
-
-# UV lock
-uv.lock
-
+test/
 # Database
 *.db

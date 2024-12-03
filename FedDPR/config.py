@@ -4,6 +4,7 @@ import tomllib
 
 @dataclass
 class DBConfig:
+    table: str
     path: str
     reset: bool
     
@@ -17,6 +18,12 @@ class LocalConfig:
     model: str
     datapath: str
     device: str
+    
+@dataclass
+class PeerConfig:
+    n_total: int
+    n_malicious: int
+    attack_type: str
 
 @dataclass
 class Config:
@@ -24,10 +31,8 @@ class Config:
     local: LocalConfig
     split: str
     penalty: float
-    n_learners: int
-    n_aggregators: int
-    n_malicious_learners: int
-    attack_type: str
+    learner: PeerConfig
+    aggregator: PeerConfig
     n_rounds: int
     db: DBConfig
     

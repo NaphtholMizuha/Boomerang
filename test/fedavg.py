@@ -2,7 +2,9 @@ from FedDPR.algorithm import fetch_algorithm
 from FedDPR.config import toml2cfg
 
 def main():
-    alg = fetch_algorithm(toml2cfg("config/default.toml"))
+    cfg = toml2cfg("config/default.toml")
+    cfg.algorithm = 'fedavg'
+    alg = fetch_algorithm(cfg)
     alg.run()
     
 if __name__ == "__main__":

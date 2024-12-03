@@ -1,11 +1,17 @@
 algorithm = 'feddpr'
-n_learners = 20
-n_aggregators = 10
-n_malicious_learners = 2
-attack_type = 'gradient-flipped'
 n_rounds = 40
 split = 'iid'
 penalty = 0.8
+
+[learner]
+n_total = 20
+n_malicious = 2
+attack_type = 'gradient-flipped'
+
+[aggregator]
+n_total = 10
+n_malicious = 0
+attack_type = 'gradient-flipped'
 
 [local]
 dataset = 'cifar10'
@@ -18,5 +24,6 @@ batch_size = 32
 num_workers = 2
 
 [db]
+table = 'feddpr-no-la'
 path = 'db/result.db'
 reset = true
