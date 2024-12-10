@@ -1,4 +1,4 @@
 from .learner import fetch_learner
-from .aggregator import Aggregator
+from .aggregator import fetch_aggregator
 
-__all__ = ["Aggregator", "fetch_learner"]
+__all__ = ["fetch_aggregator", "fetch_learner"]

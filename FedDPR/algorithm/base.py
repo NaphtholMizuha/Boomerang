@@ -1,18 +1,39 @@
 from FedDPR.config import Config
 from FedDPR.training import Trainer, fetch_dataset, fetch_datasplitter, fetch_model
-from FedDPR.peer import Aggregator, fetch_learner
+from FedDPR.peer import fetch_aggregator, fetch_learner
 from copy import deepcopy
-import duckdb
-
+import sqlite3
+import hashlib
+import pickle
 
 class Algorithm:
     def __init__(self, cfg: Config):
         self.cfg: Config = cfg
+        
+        record = {
+            'alg' : cfg.algorithm,
+            'dataset': cfg.local.dataset,
+            'model': cfg.local.model,
+            'n_rounds': cfg.n_rounds,
+            'n_epochs': cfg.local.n_epochs,
+            'split': cfg.split,
+            'n_lrn': cfg.learner.n_total,
+            'm_lrn': cfg.learner.n_malicious,
+            'atk_lrn': cfg.learner.attack_type,
+            'n_agg': cfg.aggregator.n_total,
+            'm_agg': cfg.aggregator.n_malicious,
+            'atk_agg' : cfg.aggregator.attack_type
+        }
 
-        with duckdb.connect(cfg.db.path) as con:
+        self.expid = hashlib.md5(pickle.dumps(record)).hexdigest()
+
+        
+        with sqlite3.connect(cfg.db.path) as con:
+            con.execute('INSERT OR REPLACE INTO setting VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)', [self.expid] + list(record.values()))
             if cfg.db.reset:
-                con.execute(f"TRUNCATE TABLE {cfg.db.table}")
-
+                con.execute('DELETE FROM records WHERE expid=?', [self.expid])
+                con.execute('DELETE FROM scores WHERE expid=?', [self.expid])
+                
         models = [
             fetch_model(cfg.local.model).to(cfg.local.device)
             for _ in range(cfg.learner.n_total)
@@ -47,7 +68,12 @@ class Algorithm:
         ]
 
         self.aggregators = [
-            Aggregator(n_learners=cfg.learner.n_total, penalty=cfg.penalty)
+            fetch_aggregator(
+                type=cfg.aggregator.attack_type if i < cfg.aggregator.n_malicious else 'benign',
+                n_learners=cfg.learner.n_total,
+                penalty=cfg.penalty,
+                n_malicious_learners=cfg.learner.n_malicious
+            )
             for i in range(cfg.aggregator.n_total)
         ]
 

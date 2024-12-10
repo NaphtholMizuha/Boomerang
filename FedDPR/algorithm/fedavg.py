@@ -1,6 +1,5 @@
 from .base import Algorithm, Config
-import duckdb
-from datetime import datetime
+import sqlite3
 import numpy as np
 
 class FedAvg(Algorithm):
@@ -9,19 +8,21 @@ class FedAvg(Algorithm):
         
     def run_a_round(self, r):
         for i, loss, acc in self.run_inner():
-            with duckdb.connect(self.cfg.db.path) as con:
+            with sqlite3.connect(self.cfg.db.path) as con:
                 con.execute(
-                    f"INSERT INTO {self.cfg.algorithm} VALUES (?, ?, ?, ?, ?)",
-                    [datetime.now(), r, i, loss, acc],
+                    "INSERT INTO records VALUES (?, ?, ?, ?, ?)",
+                    [self.expid, 0, r, loss, acc],
                 )
         
     def run_inner(self):
         grads = []
+        print("Learner ", end="")
         for i, learner in enumerate(self.learners):
             learner.local_train()
-            print(f"Learner {i} finished training")
+            print(f"{i}..", end="")
             grads.append(learner.get_grad())
-
+        print("Finish")
+        
         grad_g = self.aggregators[0].aggregate(grads)
 
         for learner in self.learners:

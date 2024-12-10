@@ -25,7 +25,7 @@ class FedDpr(Algorithm):
             learner.score_aggregators(grads_g)
             learner.set_grads(grads_g)
             rev_score = learner.get_rev_scores()
-            print(f"weights of L{i}: {learner.coeff}")
+            print(f"rev_scores of L{i}: {rev_score}")
             rev_scores.append(rev_score)
             
             
@@ -33,7 +33,7 @@ class FedDpr(Algorithm):
         
         for j, aggregator in enumerate(self.aggregators):
             aggregator.score_learners(rev_scores[j])
-            print(f"weights of A{j}: {aggregator.weights}")
+            print(f"fwd_scores of A{j}: {aggregator.fwd_scores}")
 
         for i, learner in enumerate(self.learners):
             loss, acc = self.learners[i].test()
@@ -42,14 +42,18 @@ class FedDpr(Algorithm):
         with duckdb.connect(self.cfg.db.path) as con:
             # writing records of learners
             for i, learner in enumerate(self.learners):
-                con.execute(
-                    f"INSERT INTO {self.cfg.db.table} VALUES (?, ?, ?, ?, ?, ?)",
-                    [r, 'learner', i, learner.loss, learner.acc, learner.get_rev_scores()],
-                )
+                rev_scores = learner.get_rev_scores
+                for j, score in enumerate(rev_scores):
+                    con.execute(
+                        "INSERT INTO scores VALUES (?, ?, ?, ?, ?, ?)",
+                        [self.expid, 0, r, 'L'+i, 'A'+j, score],
+                    )
                 
             # writing records of aggregators
             for j, aggregator in enumerate(self.aggregators):
-                con.execute(
-                    f"INSERT INTO {self.cfg.db.table} VALUES (?, ?, ?, ?, ?, ?)",
-                    [r, 'aggregator', j, None, None, aggregator.fwd_scores],
-                )
+                scores = aggregator.fwd_scores
+                for i, score in enumerate(scores):
+                    con.execute(
+                        "INSERT INTO scores VALUES (?, ?, ?, ?, ?, ?)",
+                        [self.expid, 0, r, 'A'+j, 'L'+i, score],
+                    )

@@ -7,6 +7,8 @@ def main():
     parser.add_argument('-c', "--config", type=str, default="config/default.toml")
     parser.add_argument('-a', "--algorithm", type=str, default=None)
     parser.add_argument('-t', "--table", type=str, default=None)
+    parser.add_argument("--m-lrn", type=int, default=None)
+    parser.add_argument("--m-agg", type=int, default=None)
     args = parser.parse_args()
     
     cfg = toml2cfg(args.config)
@@ -16,6 +18,12 @@ def main():
         
     if args.table is not None:
         cfg.db.table = args.table
+        
+    if args.m_lrn is not None:
+        cfg.learner.n_malicious = args.m_lrn
+        
+    if args.m_agg is not None:
+        cfg.aggregator.n_malicious = args.m_agg
     
     alg = fetch_algorithm(cfg)
     alg.run()

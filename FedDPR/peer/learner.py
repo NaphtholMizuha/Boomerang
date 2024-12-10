@@ -88,7 +88,7 @@ class Learner:
         norm1 = np.linalg.norm(grads, axis=0)
         norm2 = np.linalg.norm(g_local)
         self.rev_scores = product / (norm1 * norm2)
-        self.coeff = normalize((self.rev_scores + 1) / 2)
+        self.coeff = normalize(np.exp(self.rev_scores))
         # self.coeff = np.ones(self.n_aggregator) / self.n_aggregator
 
     def get_rev_scores(self) -> np.array:
