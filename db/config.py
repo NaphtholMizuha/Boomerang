@@ -36,6 +36,10 @@ class Config:
     aggregator: PeerConfig
     n_rounds: int
     db: DBConfig
+    
+    def __post_init__(self):
+        if self.algorithm not in ['fedavg', 'feddpr']:
+            raise ValueError(f'Algorithm {self.algorithm} not supported')
         
 def dict_to_dataclass(cls, data):
     """

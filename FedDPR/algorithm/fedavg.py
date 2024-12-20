@@ -7,30 +7,31 @@ class FedAvg(Algorithm):
         super().__init__(cfg)
         
     def run_a_round(self, r):
-        for i, loss, acc in self.run_inner():
-            with sqlite3.connect(self.cfg.db.path) as con:
-                con.execute(
-                    "INSERT INTO records VALUES (?, ?, ?, ?, ?)",
-                    [self.expid, 0, r, loss, acc],
-                )
-        
-    def run_inner(self):
         grads = []
         print("Learner ", end="")
         for i, learner in enumerate(self.learners):
             learner.local_train()
             print(f"{i}..", end="")
-            grads.append(learner.get_grad())
         print("Finish")
         
-        grad_g = self.aggregators[0].aggregate(grads)
+        grads = [learner.get_grad() for learner in self.learners]
+        grads_g = [aggregator.aggregate(grads) for aggregator in self.aggregators]            
+        grads_g = np.vstack(grads_g).T
+        grad_g = grads_g.dot(np.ones(self.cfg.aggregator.n_total))
 
-        for learner in self.learners:
+        for i, learner in enumerate(self.learners):
             learner.set_grad(grad_g)
+        loss, acc = self.learners[0].test()
+        print(f"Client: {i}, Loss: {loss}, Acc: {acc}")
+            
 
-        evaluate = [learner.test() for learner in self.learners[self.cfg.learner.n_malicious:]]
-        loss = np.mean([x[0] for x in evaluate])
-        acc = np.mean([x[1] for x in evaluate])
-        print(f"Loss: {loss}, Acc: {acc}")
-        yield 0, loss, acc
+
+        # loss = np.mean([x[0] for x in evaluate])
+        # acc = np.mean([x[1] for x in evaluate])
+            
+        with sqlite3.connect(self.cfg.db.path) as con:
+            con.execute(
+                "INSERT INTO records VALUES (?, ?, ?, ?, ?)",
+                [self.expid, 0, r, loss, acc],
+            )
 

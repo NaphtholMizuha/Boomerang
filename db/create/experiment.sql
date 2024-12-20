@@ -1,5 +1,5 @@
 CREATE TABLE setting (
-    id TEXT PRIMARY KEY,
+    codename TEXT PRIMARY KEY,
     alg TEXT,
     dataset TEXT,
     model TEXT,

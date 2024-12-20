@@ -1,5 +1,5 @@
-CREATE TABLE records (
-    expid TEXT,
+CREATE TABLE results (
+    codename TEXT,
     turn INT,
     rnd INT,
     loss FLOAT,

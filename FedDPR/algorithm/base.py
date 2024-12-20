@@ -1,10 +1,9 @@
-from FedDPR.config import Config
+from FedDPR.config import Config, cfg2expid
 from FedDPR.training import Trainer, fetch_dataset, fetch_datasplitter, fetch_model
 from FedDPR.peer import fetch_aggregator, fetch_learner
 from copy import deepcopy
 import sqlite3
-import hashlib
-import pickle
+
 
 class Algorithm:
     def __init__(self, cfg: Config):
@@ -25,7 +24,7 @@ class Algorithm:
             'atk_agg' : cfg.aggregator.attack_type
         }
 
-        self.expid = hashlib.md5(pickle.dumps(record)).hexdigest()
+        self.expid = cfg2expid(cfg)
 
         
         with sqlite3.connect(cfg.db.path) as con:
@@ -34,6 +33,8 @@ class Algorithm:
                 con.execute('DELETE FROM records WHERE expid=?', [self.expid])
                 con.execute('DELETE FROM scores WHERE expid=?', [self.expid])
                 
+        init_model = fetch_model(cfg.local.model).to(cfg.local.device)
+                        
         models = [
             fetch_model(cfg.local.model).to(cfg.local.device)
             for _ in range(cfg.learner.n_total)
@@ -57,12 +58,14 @@ class Algorithm:
         self.learners = [
             fetch_learner(
                 n_epoch=cfg.local.n_epochs,
-                init_state=deepcopy(models[i].state_dict()),
+                init_state=deepcopy(init_model.state_dict()),
                 trainer=trainers[i],
                 n_aggregator=cfg.aggregator.n_total,
                 type=cfg.learner.attack_type
                 if i < cfg.learner.n_malicious
                 else "benign",
+                n=cfg.learner.n_total,
+                m=cfg.learner.n_malicious
             )
             for i in range(cfg.learner.n_total)
         ]
@@ -84,3 +87,17 @@ class Algorithm:
         for r in range(self.cfg.n_rounds):
             print(f"Round {r+1}/{self.cfg.n_rounds}")
             self.run_a_round(r)
+            
+    def exec_sql(self, sql, params):
+        retries = 5
+        while retries > 0:
+            try:
+            
+                with sqlite3.connect(self.cfg.db.path) as con:
+                    con.execute(sql, params)
+                break
+            except sqlite3.Error:
+                retries -= 1
+                if retries == 0:
+                    raise TimeoutError("exceeds max retry times of sql query")
+ 

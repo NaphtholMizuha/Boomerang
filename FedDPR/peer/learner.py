@@ -3,6 +3,7 @@ from ..utils import normalize
 from typing import Dict, Tuple, Literal
 import torch
 import numpy as np
+import scipy.stats as stats
 
 StateDict = Dict[str, torch.Tensor]
 StateTemplate = Dict[str, Tuple[int, ...]]
@@ -72,7 +73,7 @@ class Learner:
 
     def set_grad(self, grad: np.ndarray):
         self.state = grad + self.state
-        statedict = self.unflat(grad, self.shapes)
+        statedict = self.unflat(self.state, self.shapes)
         self.trainer.set_state(statedict)
 
 
@@ -87,9 +88,8 @@ class Learner:
         product = np.dot(grads.transpose(), g_local)
         norm1 = np.linalg.norm(grads, axis=0)
         norm2 = np.linalg.norm(g_local)
-        self.rev_scores = product / (norm1 * norm2)
-        self.coeff = normalize(np.exp(self.rev_scores))
-        # self.coeff = np.ones(self.n_aggregator) / self.n_aggregator
+        self.rev_scores = np.exp(product / (norm1 * norm2))
+        self.coeff = normalize(self.rev_scores)
 
     def get_rev_scores(self) -> np.array:
         return self.rev_scores
@@ -103,12 +103,51 @@ class GradientFlippedLearner(Learner):
         
     def get_grad(self):
         return -super().get_grad()
+    
+class LabelFlippedLearner(Learner):
+    
+    def __init__(self, n_epoch: int, init_state: Dict, trainer: Trainer, n_aggregator: int) -> None:
+        super().__init__(n_epoch, init_state, trainer, n_aggregator)
+        self.trainer.label_flip(1)
 
-def fetch_learner(n_epoch: int, init_state: Dict, trainer: Trainer, n_aggregator: int, type: Literal['benign', 'gradient-flipped', 'label-flipped']):
+    
+    def get_individual_grad(self):
+        return super().get_grad()
+        
+    def get_grad(self):
+        return super().get_grad()
+
+class ALittleIsEnoughLearner(Learner):
+    instances = []
+    def __init__(self, n_epoch: int, init_state: Dict, trainer: Trainer, n_aggregator: int, n: int, m: int) -> None:
+        super().__init__(n_epoch, init_state, trainer, n_aggregator)
+        self.n = n
+        self.m = m
+        self.s = np.floor(self.n/2 + 1) - self.m
+        self.z = stats.norm.ppf((self.n - self.m - self.s)/(self.n - self.m))
+        ALittleIsEnoughLearner.instances.append(self)
+        
+    def __del__(self):
+        ALittleIsEnoughLearner.instances.remove(self)
+    
+    def get_individual_grad(self):
+        return super().get_grad()
+        
+    def get_grad(self):
+        grads_m = [oscar.get_individual_grad() for oscar in ALittleIsEnoughLearner.instances]
+        grads_m = np.vstack(grads_m)
+        grad = grads_m.mean(axis=0) - grads_m.std(axis=0) * self.z
+        return grad
+    
+def fetch_learner(n_epoch: int, init_state: Dict, trainer: Trainer, n_aggregator: int, type: Literal['benign', 'gradient-flipped', 'label-flipped'], **kwargs):
     if type == 'benign':
         return Learner(n_epoch, init_state, trainer, n_aggregator)
     elif type == 'gradient-flipped':
         return GradientFlippedLearner(n_epoch, init_state, trainer, n_aggregator)
+    elif type == 'label-flipped':
+        return LabelFlippedLearner(n_epoch, init_state, trainer, n_aggregator)
+    elif type == 'a-little-is-enough':
+        return ALittleIsEnoughLearner(n_epoch, init_state, trainer, n_aggregator, **kwargs)
     else:
         raise NotImplementedError(f"unsupported learner type: {type}")
         

@@ -1,26 +1,25 @@
-codename = 'fedavg'
-algorithm = 'fedavg'
-n_rounds = 40
+algorithm = 'feddpr'
+n_rounds = 100
 split = 'iid'
 penalty = 0.8
 
 [learner]
 n_total = 20
-n_malicious = 0
-attack_type = 'gradient-flipped'
+n_malicious = 2
+attack_type = 'a-little-is-enough'
 
 [aggregator]
 n_total = 10
-n_malicious = 0
-attack_type = 'gradient-flipped'
+n_malicious = 1
+attack_type = 'colluding'
 
 [local]
-dataset = 'cifar10'
-model = 'cnn'
+dataset = 'fmnist'
+model = 'cnn-gray'
 datapath = '~/data'
 device = 'cuda'
 n_epochs = 5
-lr = 0.01
+lr = 0.001
 batch_size = 32
 num_workers = 2
 

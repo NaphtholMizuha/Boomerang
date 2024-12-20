@@ -10,6 +10,7 @@ class Trainer:
         self.criterion = nn.CrossEntropyLoss().to(device)
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr, momentum=0.9)
         self.device = device
+        self.offset = 0
 
     def train(self):
         self.model.train()
@@ -17,6 +18,7 @@ class Trainer:
 
         for x, y in self.train_loader:
             x, y = x.to(self.device), y.to(self.device)
+            y = (y + self.offset) % 10
             pred = self.model(x)
             loss = self.criterion(pred, y)
             loss.backward()
@@ -35,6 +37,9 @@ class Trainer:
     
     def set_state(self, state):
         self.model.load_state_dict(state)
+        
+    def label_flip(self, offset):
+        self.offset = offset
             
     def test(self):
         self.model.eval()
