@@ -1,11 +1,21 @@
-from dataclasses import dataclass, fields, is_dataclass
-from typing import Literal
+from dataclasses import dataclass, field, fields, is_dataclass
 import tomllib
-import hashlib
-import pickle
+
+@dataclass
+class SplitConfig:
+    method: str
+    alpha: float = field(default=1.0)
+    def __str__(self):
+        if self.method == 'iid':
+            return "IID"
+        elif self.method == 'dirichlet':
+            return f"Dir({self.alpha:.1f})"
+        else:
+            return "Unknown"
 
 @dataclass
 class DBConfig:
+    enable: bool
     path: str
     reset: bool
     
@@ -20,22 +30,27 @@ class LocalConfig:
     datapath: str
     device: str
     
+    
+    
 @dataclass
 class PeerConfig:
-    n_total: int
-    n_malicious: int
-    attack_type: str
+    n: int
+    m: int
+    attack: str
+    defense: str
 
 @dataclass
 class Config:
-    algorithm: Literal['fedavg', 'feddpr']
     local: LocalConfig
-    split: str
+    split: SplitConfig
     penalty: float
     learner: PeerConfig
     aggregator: PeerConfig
     n_rounds: int
+    n_turns: int
     db: DBConfig
+    
+    
         
 def dict_to_dataclass(cls, data):
     """
@@ -64,20 +79,3 @@ def toml2cfg(path: str) -> Config:
     with open(path, 'rb') as f:
         cfg = tomllib.load(f)
     return dict_to_dataclass(Config, cfg)
-
-def cfg2expid(cfg: Config) -> str:
-    record = {
-            'alg' : cfg.algorithm,
-            'dataset': cfg.local.dataset,
-            'model': cfg.local.model,
-            'n_rounds': cfg.n_rounds,
-            'n_epochs': cfg.local.n_epochs,
-            'split': cfg.split,
-            'n_lrn': cfg.learner.n_total,
-            'm_lrn': cfg.learner.n_malicious,
-            'atk_lrn': cfg.learner.attack_type,
-            'n_agg': cfg.aggregator.n_total,
-            'm_agg': cfg.aggregator.n_malicious,
-            'atk_agg' : cfg.aggregator.attack_type
-        }
-    return hashlib.md5(pickle.dumps(record)).hexdigest()

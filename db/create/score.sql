@@ -1,8 +1,9 @@
 CREATE TABLE scores (
-    expid TEXT,
+    id TEXT,
     turn INT,
     rnd INT,
     src TEXT,
     dest TEXT,
-    score FLOAT
+    score FLOAT,
+    PRIMARY KEY (id, turn, rnd, src, dest)
 );

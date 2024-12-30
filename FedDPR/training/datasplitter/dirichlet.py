@@ -8,6 +8,7 @@ class DirichletSplitter(DataSplitter):
         self.alpha = alpha
         
     def calc_split_map(self):
+        print(f"Splitting data into {self.n_client} clients using Dirichlet distribution with alpha={self.alpha}")
         labels = np.array([item[1] for item in self.dataset])
         n_class = np.max(labels) + 1
         label_dist = np.random.dirichlet([self.alpha] * self.n_client, n_class)

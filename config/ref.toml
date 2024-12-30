@@ -1,28 +1,34 @@
-algorithm = 'fedavg'
-n_rounds = 100
-split = 'iid'
+n_rounds = 40
 penalty = 0.8
+n_turns = 5
+
+[split]
+method = 'iid'
+alpha = 0.1
 
 [learner]
-n_total = 20
-n_malicious = 0
-attack_type = 'gradient-flipped'
+n = 20
+m = 0
+attack = 'none'
+defense = 'none'
 
 [aggregator]
-n_total = 1
-n_malicious = 0
-attack_type = 'gradient-flipped'
+n = 10
+m = 0
+attack = 'none'
+defense = 'none'
 
 [local]
-dataset = 'fmnist'
-model = 'cnn-gray'
+dataset = 'imagenette'
+model = 'resnet'
 datapath = '~/data'
 device = 'cuda'
-n_epochs = 3
+n_epochs = 5
 lr = 0.01
 batch_size = 32
 num_workers = 2
 
 [db]
-path = 'db/result.db'
+enable = true
+path = 'db/record.db'
 reset = true

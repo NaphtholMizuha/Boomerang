@@ -1,6 +1,10 @@
 # Python-generated files
 __pycache__/
-log/
-test/
+
 # Database
 *.db
+*.lock
+# Logs
+log/
+test/
+config/

@@ -1,6 +1,6 @@
 from ..training.trainer import Trainer
 from ..utils import normalize
-from typing import Dict, Tuple, Literal
+from typing import Dict, Tuple
 import torch
 import numpy as np
 import scipy.stats as stats
@@ -12,30 +12,29 @@ StateTemplate = Dict[str, Tuple[int, ...]]
 
 
 class Learner:
-    count = 0
-
     def __init__(
-        self, n_epoch: int, init_state: dict, trainer: Trainer, n_aggregator: int
+        self, n_epoch: int, init_state: dict, trainer: Trainer, n_aggr: int, attack: str, defense: str
     ) -> None:
         self.state = self.flat(init_state)
         self.shapes = {key: value.shape for key, value in init_state.items()}
         self.trainer = trainer
         self.n_epoch = n_epoch
-        self.n_aggregator = n_aggregator
-        self.rev_scores = np.empty(n_aggregator)
-        self.coeff = np.empty(n_aggregator)
-        self.id = self.count
-        self.count += 1
-
-    def __del__(self):
-        self.count -= 1
+        self.n_aggregator = n_aggr
+        self.rev_scores = np.empty(n_aggr)
+        self.coeff = np.empty(n_aggr)
+        self.atk = attack
+        self.dfn = defense
+        
+        if self.atk == 'label-flip':
+            self.trainer.label_flip(1)
 
     @staticmethod
     def flat(x: StateDict) -> np.ndarray:
         w_list = []
         for key, weight in x.items():
-            w_i = weight.flatten().to("cpu").numpy()
-            w_list.append(w_i)
+            if weight.shape != torch.Size([]):
+                w_i = weight.flatten().to("cpu").numpy()
+                w_list.append(w_i)
         return np.concatenate(w_list)
 
     @staticmethod
@@ -44,11 +43,14 @@ class Learner:
         start_idx = 0
 
         for key, shape in shapes.items():
-            size = np.prod(shape)
-            slice = x[start_idx : start_idx + size].reshape(shape)
-            slice = torch.from_numpy(slice)
-            state[key] = slice
-            start_idx += size
+            # print(f"key: {key}, shape: {shape}")
+            if len(shape) != 0:
+                size = np.prod(shape)
+                # print(size)
+                slice = x[start_idx : start_idx + size].reshape(shape)
+                slice = torch.from_numpy(slice)
+                state[key] = slice
+                start_idx += size
 
         return state
 
@@ -67,26 +69,57 @@ class Learner:
         weight_t = self.unflat(weight, self.shapes)
         self.trainer.set_state(weight_t)
 
-    def get_grad(self):
+    def get_raw_grad(self):
         newer = self.flat(self.trainer.get_state())
         return newer - self.state
+    
+    def get_grad(self):
+        return self.attack(self.get_raw_grad())
+    
+    def attack(self, x):
+        if self.atk == 'none' or self.atk == 'label-flip':
+            return x
+        elif self.atk == 'ascent':
+            return -x
+        
+    def aggregate(self, grads: np.ndarray):
+        if self.dfn == 'none':
+            return np.mean(grads, axis=0)
+        elif self.dfn == 'median':
+            return np.median(grads, axis=0)
+        elif self.dfn == 'trm':
+            grads.sort(axis=0)
+            return stats.trim_mean(grads , 0.1, axis=0)
+        elif self.dfn == 'score':
+            weights = self.coeff / self.coeff.sum()
+            return np.average(grads, axis=0, weights=weights)
+        elif self.dfn == 'krum':
+            diff = grads[:, np.newaxis, :] - grads[np.newaxis, :, :]
+            squared_diff = diff ** 2
+            sum_squared_diff = np.sum(squared_diff, axis=2)
+            dist_mat = np.sqrt(sum_squared_diff)
+            dist_vec = np.sum(dist_mat, axis=1)
+            target = np.argmin(dist_vec)
+            return grads[target]
 
     def set_grad(self, grad: np.ndarray):
         self.state = grad + self.state
         statedict = self.unflat(self.state, self.shapes)
         self.trainer.set_state(statedict)
 
+    def set_grads(self, grads: np.ndarray):
+        self.set_grad(self.aggregate(grads))
 
-    def score_aggregators(self, grads: np.ndarray):
-        g_local = self.get_grad()
+    def update_scores(self, grads: np.ndarray):
+        g_local = self.get_raw_grad()
 
         if grads.ndim != 2:
             raise ValueError(
                 f"Excepted a 2D array for grads, but got {grads.ndim}D array."
             )
 
-        product = np.dot(grads.transpose(), g_local)
-        norm1 = np.linalg.norm(grads, axis=0)
+        product = np.dot(grads, g_local)
+        norm1 = np.linalg.norm(grads, axis=1)
         norm2 = np.linalg.norm(g_local)
         self.rev_scores = np.exp(product / (norm1 * norm2))
         self.coeff = normalize(self.rev_scores)
@@ -94,62 +127,5 @@ class Learner:
     def get_rev_scores(self) -> np.array:
         return self.rev_scores
 
-    def set_grads(self, grads: np.ndarray):
-        self.set_grad(grads.dot(self.coeff))
 
-class GradientFlippedLearner(Learner):
-    def __init__(self, n_epoch: int, init_state: Dict, trainer: Trainer, n_aggregator: int) -> None:
-        super().__init__(n_epoch, init_state, trainer, n_aggregator)
-        
-    def get_grad(self):
-        return -super().get_grad()
-    
-class LabelFlippedLearner(Learner):
-    
-    def __init__(self, n_epoch: int, init_state: Dict, trainer: Trainer, n_aggregator: int) -> None:
-        super().__init__(n_epoch, init_state, trainer, n_aggregator)
-        self.trainer.label_flip(1)
-
-    
-    def get_individual_grad(self):
-        return super().get_grad()
-        
-    def get_grad(self):
-        return super().get_grad()
-
-class ALittleIsEnoughLearner(Learner):
-    instances = []
-    def __init__(self, n_epoch: int, init_state: Dict, trainer: Trainer, n_aggregator: int, n: int, m: int) -> None:
-        super().__init__(n_epoch, init_state, trainer, n_aggregator)
-        self.n = n
-        self.m = m
-        self.s = np.floor(self.n/2 + 1) - self.m
-        self.z = stats.norm.ppf((self.n - self.m - self.s)/(self.n - self.m))
-        ALittleIsEnoughLearner.instances.append(self)
-        
-    def __del__(self):
-        ALittleIsEnoughLearner.instances.remove(self)
-    
-    def get_individual_grad(self):
-        return super().get_grad()
-        
-    def get_grad(self):
-        grads_m = [oscar.get_individual_grad() for oscar in ALittleIsEnoughLearner.instances]
-        grads_m = np.vstack(grads_m)
-        grad = grads_m.mean(axis=0) - grads_m.std(axis=0) * self.z
-        return grad
-    
-def fetch_learner(n_epoch: int, init_state: Dict, trainer: Trainer, n_aggregator: int, type: Literal['benign', 'gradient-flipped', 'label-flipped'], **kwargs):
-    if type == 'benign':
-        return Learner(n_epoch, init_state, trainer, n_aggregator)
-    elif type == 'gradient-flipped':
-        return GradientFlippedLearner(n_epoch, init_state, trainer, n_aggregator)
-    elif type == 'label-flipped':
-        return LabelFlippedLearner(n_epoch, init_state, trainer, n_aggregator)
-    elif type == 'a-little-is-enough':
-        return ALittleIsEnoughLearner(n_epoch, init_state, trainer, n_aggregator, **kwargs)
-    else:
-        raise NotImplementedError(f"unsupported learner type: {type}")
-        
-        
         

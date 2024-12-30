@@ -1,16 +1,8 @@
 from ..config import Config
-from .fedavg import FedAvg
-from .feddpr import FedDpr
-from .simple import Krum, TrimmedMean
+from .fl import NaiveFl, ScoreFl
 
 def fetch_algorithm(cfg: Config):
-    if cfg.algorithm == 'fedavg':
-        return FedAvg(cfg)
-    elif cfg.algorithm == 'feddpr':
-        return FedDpr(cfg)
-    elif cfg.algorithm == 'krum':
-        return Krum(cfg)
-    elif cfg.algorithm == 'trimmed-mean':
-        return TrimmedMean(cfg)
+    if cfg.learner.defense == 'score' and cfg.aggregator.defense == 'score':
+        return ScoreFl(cfg)
     else:
-        raise ValueError(f"unsupported algorithm: {cfg.algorithm}")
+        return NaiveFl(cfg)
