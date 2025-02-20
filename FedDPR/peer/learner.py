@@ -27,6 +27,8 @@ class Learner:
         
         if self.atk == 'label-flip':
             self.trainer.label_flip(1)
+        elif self.atk == 'backdoor':
+            self.trainer.train_loader = self.trainer.backdoor_train_loader
 
     @staticmethod
     def flat(x: StateDict) -> np.ndarray:
@@ -57,8 +59,8 @@ class Learner:
     def local_train(self):
         self.trainer.train_epochs(self.n_epoch)
 
-    def test(self):
-        self.loss, self.acc = self.trainer.test()
+    def test(self, backdoor=False):
+        self.loss, self.acc = self.trainer.test(backdoor)
         return self.loss, self.acc
 
     def get_weight(self):
@@ -77,7 +79,7 @@ class Learner:
         return self.attack(self.get_raw_grad())
     
     def attack(self, x):
-        if self.atk == 'none' or self.atk == 'label-flip':
+        if self.atk == 'none' or self.atk == 'label-flip' or self.atk == 'backdoor':
             return x
         elif self.atk == 'ascent':
             return -x
@@ -122,6 +124,8 @@ class Learner:
         norm1 = np.linalg.norm(grads, axis=1)
         norm2 = np.linalg.norm(g_local)
         self.rev_scores = np.exp(product / (norm1 * norm2))
+        # thr = 3
+        # self.rev_scores[norm1 > thr * norm2] = 0
         self.coeff = normalize(self.rev_scores)
 
     def get_rev_scores(self) -> np.array:

@@ -2,43 +2,27 @@ from FedDPR.config import Config
 from FedDPR.training import Trainer, fetch_dataset, fetch_datasplitter, fetch_model
 from FedDPR.peer import Aggregator, Learner
 from copy import deepcopy
-import sqlite3
-import zlib
+from dataclasses import asdict
+import json
+import psycopg2
 
 class Algorithm:
     def __init__(self, cfg: Config):
         # Initialize the configuration object
-        self.cfg: Config = cfg
-
-        settings = (
-            cfg.local.dataset,
-            cfg.local.model,
-            cfg.n_rounds,
-            cfg.local.n_epochs,
-            str(cfg.split),
-            cfg.learner.n,
-            cfg.learner.m,
-            cfg.learner.attack,
-            cfg.learner.defense,
-            cfg.aggregator.n,
-            cfg.aggregator.m,
-            cfg.aggregator.attack,
-            cfg.aggregator.defense,
-        )
-        
-        hashid = zlib.crc32(str(settings).encode())
-        self.id = f"{hashid:x}"
+        self.cfg = cfg
 
         # Insert or replace the configuration settings into the database
-        self.exec_sql(
-            f"INSERT OR REPLACE INTO settings VALUES ({','.join(['?'] * (len(settings) + 1))})",
-            (self.id,) + settings,
-        )
+
+        params = asdict(cfg)
+        params.pop('db')
         
-        # If the database reset flag is set, delete existing results and scores for the current codename
         if cfg.db.reset:
-            self.exec_sql("DELETE FROM results WHERE id=?", [self.id])
-            self.exec_sql("DELETE FROM scores WHERE id=?", [self.id])
+            self.exec_sql("DELETE FROM params WHERE params=%s", [json.dumps(params)])
+            print("ID Reset")
+        
+        if cfg.db.enable:
+            self.id = self.exec_sql("INSERT INTO params (params) VALUES (%s) RETURNING id", [json.dumps(params)])
+            print(f"ID Generated: {self.id}")
 
         # Fetch the initial model and move it to the specified device
         init_model = fetch_model(cfg.local.model).to(cfg.local.device)
@@ -67,6 +51,7 @@ class Algorithm:
                 bs=cfg.local.batch_size,
                 nw=cfg.local.num_workers,
                 lr=cfg.local.lr,
+                backdoor=cfg.learner.attack=='backdoor'
             )
             for i in range(cfg.learner.n)
         ]
@@ -108,5 +93,10 @@ class Algorithm:
     def exec_sql(self, sql, params):
         # Execute SQL queries if the database is enabled
         if self.cfg.db.enable:
-            with sqlite3.connect(self.cfg.db.path) as conn:
-                conn.execute(sql, params)
+            with psycopg2.connect(f'dbname=feddpr user={self.cfg.db.user} password={self.cfg.db.password} host=localhost port=5432') as conn:
+                conn.autocommit = True
+                with conn.cursor() as cur:
+                    cur.execute(sql, params)
+                    if "RETURNING" in sql.upper():
+                        return cur.fetchone()[0]
+                    

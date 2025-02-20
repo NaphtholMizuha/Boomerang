@@ -9,6 +9,24 @@ def main():
     parser.add_argument('-t', "--table", type=str, default=None)
     parser.add_argument("--m-lrn", type=int, default=None)
     parser.add_argument("--m-agg", type=int, default=None)
+    
+    # Local training parameters
+    parser.add_argument("--lr", type=float, default=None, help="learning rate")
+    parser.add_argument("--batch-size", type=int, default=None, help="batch size")
+    parser.add_argument("--epochs", type=int, default=None, help="number of epochs")
+    parser.add_argument("--device", type=str, default=None, help="device to use (cpu/cuda)")
+    
+    # Data split parameters
+    parser.add_argument("--split-method", type=str, default=None, 
+                       choices=["iid", "dirichlet"], help="data split method")
+    parser.add_argument("--split-alpha", type=float, default=None, 
+                       help="alpha parameter for dirichlet split")
+    
+    # Database parameters
+    parser.add_argument("--enable-db", action="store_true", 
+                       help="enable database logging")
+    parser.add_argument("--reset-db", action="store_true", 
+                       help="reset database before running")
     args = parser.parse_args()
     
     cfg = toml2cfg(args.config)

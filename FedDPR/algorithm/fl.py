@@ -23,7 +23,7 @@ class NaiveFl(Algorithm):
             print(f"{i}..", end="")
         # Print the completion of training information
         print("Finish")
-
+        print(np.shape(self.learners[0].get_grad()))
         # Collect the gradients of all local learners
         grads = np.vstack([learner.get_grad() for learner in self.learners])
         # Aggregate the gradients of all local learners
@@ -31,7 +31,7 @@ class NaiveFl(Algorithm):
             [aggregator.aggregate(grads) for aggregator in self.aggregators]
         )
 
-        losses, accs = [], []
+        losses, accs, backdoor_accs = [], [], []
         # Update the gradients of all local learners
         for i, learner in enumerate(self.learners):
             learner.set_grads(grads_g)
@@ -40,6 +40,9 @@ class NaiveFl(Algorithm):
                 # only test benign learners
                 loss, acc = learner.test()
                 losses.append(loss), accs.append(acc)
+                if self.cfg.learner.attack == 'backdoor':
+                    loss, acc = learner.test(backdoor=True)
+                    backdoor_accs.append(acc)
 
         # Calculate the average loss and accuracy of all local learners
         loss, acc = np.mean(losses), np.mean(accs)
@@ -47,9 +50,16 @@ class NaiveFl(Algorithm):
         print(f"Avg Loss: {loss}, Acc: {acc}")
         # write to db
         self.exec_sql(
-            "INSERT INTO results VALUES (?, ?, ?, ?, ?)",
-            [self.id, t, r, loss, acc],
+            "INSERT INTO results VALUES (%s, %s, %s, %s, %s)",
+            [self.id, t, r, float(loss), float(acc)],
         )
+        if self.cfg.learner.attack == 'backdoor':
+            backdoor_acc = np.mean(backdoor_accs)
+            print(f"Backdoor Acc: {backdoor_acc}")
+            self.exec_sql(
+                "INSERT INTO backdoors VALUES (%s, %s, %s, %s)",
+                [self.id, t, r, float(backdoor_acc)],
+            )
 
 
 class ScoreFl(Algorithm):
@@ -72,7 +82,7 @@ class ScoreFl(Algorithm):
             [aggregator.aggregate(grads) for aggregator in self.aggregators]
         )
 
-        losses, accs = [], []
+        losses, accs, backdoor_accs = [], [], []
         # Update the gradients of all local learners
         for i, learner in enumerate(self.learners):
             learner.update_scores(grads_g)
@@ -81,33 +91,46 @@ class ScoreFl(Algorithm):
                 # only test benign learners
                 loss, acc = learner.test()
                 losses.append(loss), accs.append(acc)
+                
+                if self.cfg.learner.attack == 'backdoor':
+                    loss, acc = learner.test(backdoor=True)
+                    backdoor_accs.append(acc)
         # Calculate the average loss and accuracy of all benign learners
         loss, acc = np.mean(losses), np.mean(accs)
-
+        print(f"Avg Loss: {loss}, Acc: {acc}")
+        # write to db
+        self.exec_sql(
+            "INSERT INTO results VALUES (%s, %s, %s, %s, %s)",
+            [self.id, t, r, float(loss), float(acc)],
+        )
+        
+        if self.cfg.learner.attack == 'backdoor':
+            backdoor_acc = np.mean(backdoor_accs)
+            print(f"Backdoor Acc: {backdoor_acc}")
+            self.exec_sql(
+                "INSERT INTO backdoors VALUES (%s, %s, %s, %s)",
+                [self.id, t, r, float(backdoor_acc)],
+            )
+        
         rev_scores = np.vstack(
             [learner.get_rev_scores() for learner in self.learners]
         ).T
         for j, aggregator in enumerate(self.aggregators):
             aggregator.update_scores(rev_scores[j])
         # Print the test results
-        print(f"Avg Loss: {loss}, Acc: {acc}")
-        # write to db
-        self.exec_sql(
-            "INSERT INTO results VALUES (?, ?, ?, ?, ?)",
-            [self.id, t, r, loss, acc],
-        )
+        
         for i, learner in enumerate(self.learners):
             rev_scores = learner.get_rev_scores()
             for j, score in enumerate(rev_scores):
                 self.exec_sql(
-                    "INSERT INTO scores VALUES (?, ?, ?, ?, ?, ?)",
-                    [self.id, t, r, "L" + str(i), "A" + str(j), score],
+                    "INSERT INTO scores VALUES (%s, %s, %s, %s, %s, %s)",
+                    [self.id, t, r, "L" + str(i), "A" + str(j), float(score)],
                 )
 
         for j, aggregator in enumerate(self.aggregators):
             scores = aggregator.get_scores()
             for i, score in enumerate(scores):
                 self.exec_sql(
-                    "INSERT INTO scores VALUES (?,?,?,?,?,?)",
-                    [self.id, t, r, "A" + str(j), "L" + str(i), score],
+                    "INSERT INTO scores VALUES (%s,%s,%s,%s,%s,%s)",
+                    [self.id, t, r, "A" + str(j), "L" + str(i), float(score)],
                 )

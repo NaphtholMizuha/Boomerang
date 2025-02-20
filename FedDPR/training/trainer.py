@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from .dataset import BackDoorDataset
 
 class Trainer:
-    def __init__(self, model: nn.Module, train_set: Dataset, test_set: Dataset, bs: int, nw: int, lr: float, device: str) -> None:
+    def __init__(self, model: nn.Module, train_set: Dataset, test_set: Dataset, bs: int, nw: int, lr: float, device: str, backdoor=False) -> None:
         self.model = model
         self.train_loader = DataLoader(train_set, batch_size=bs, num_workers=nw, shuffle=True)
         self.test_loader = DataLoader(test_set, batch_size=bs, num_workers=nw)
@@ -11,6 +12,18 @@ class Trainer:
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr, momentum=0.9)
         self.device = device
         self.offset = 0
+        
+        if backdoor:
+            self.backdoor_train_loader = DataLoader(
+                BackDoorDataset(train_set, inject_mode='append'),
+                batch_size=bs,
+                num_workers=nw
+            )
+            self.backdoor_loader = DataLoader(
+                BackDoorDataset(test_set, inject_mode='replace'),
+                batch_size=bs,
+                num_workers=nw
+            )
 
     def train(self):
         self.model.train()
@@ -41,14 +54,19 @@ class Trainer:
     def label_flip(self, offset):
         self.offset = offset
             
-    def test(self):
+    def test(self, backdoor=False):
         self.model.eval()
         criterion = nn.CrossEntropyLoss().to(self.device)
 
         loss, acc = 0, 0
 
         with torch.no_grad():
-            for x, y in self.test_loader:
+            if backdoor:
+                dataloader = self.backdoor_loader
+            else:
+                dataloader = self.test_loader
+                
+            for x, y in dataloader:
                 x, y = x.to(self.device), y.to(self.device)
                 pred = self.model(x)
                 loss += criterion(pred, y).item()

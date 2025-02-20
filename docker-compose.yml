@@ -1,0 +1,25 @@
+services:
+  db:
+    image: postgres
+    container_name: pg_experiment
+    restart: always
+    environment:
+      POSTGRES_USER: wuzihou
+      POSTGRES_PASSWORD: wuzihou
+      POSTGRES_DB: feddpr
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - postgres_network
+
+volumes:
+  pgdata:
+
+networks:
+  postgres_network:
+    driver: bridge
+    ipam:
+            config:
+                    - subnet: 192.168.101.0/24

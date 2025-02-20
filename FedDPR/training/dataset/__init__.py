@@ -1,3 +1,3 @@
 from .factory import fetch_dataset
-
-__all__ = [fetch_dataset]
+from .backdoor import BackDoorDataset
+__all__ = [fetch_dataset, BackDoorDataset]

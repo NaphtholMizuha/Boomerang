@@ -16,7 +16,8 @@ class SplitConfig:
 @dataclass
 class DBConfig:
     enable: bool
-    path: str
+    user: str
+    password: str
     reset: bool
     
 @dataclass

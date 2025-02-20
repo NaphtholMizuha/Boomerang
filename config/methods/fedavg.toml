@@ -1,0 +1,35 @@
+n_rounds = 40
+penalty = 0.8
+n_turns = 5
+
+[split]
+method = 'iid'
+# alpha = 0.1
+
+[learner]
+n = 20
+m = 2
+attack = 'label-flip'
+defense = 'none'
+
+[aggregator]
+n = 1
+m = 1
+attack = 'collusion'
+defense = 'none'
+
+[local]
+dataset = 'fmnist'
+model = 'cnn-gray'
+datapath = '~/data'
+device = 'cuda'
+n_epochs = 5
+lr = 0.01
+batch_size = 32
+num_workers = 2
+
+[db]
+enable = true
+user = 'wuzihou'
+password = 'wuzihou'
+reset = true
