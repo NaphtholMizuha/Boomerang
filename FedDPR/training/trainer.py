@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-from .dataset import BackDoorDataset
+
 
 class Trainer:
     def __init__(self, model: nn.Module, train_set: Dataset, test_set: Dataset, bs: int, nw: int, lr: float, device: str, backdoor=False) -> None:
@@ -13,17 +13,6 @@ class Trainer:
         self.device = device
         self.offset = 0
         
-        if backdoor:
-            self.backdoor_train_loader = DataLoader(
-                BackDoorDataset(train_set, inject_mode='append'),
-                batch_size=bs,
-                num_workers=nw
-            )
-            self.backdoor_loader = DataLoader(
-                BackDoorDataset(test_set, inject_mode='replace'),
-                batch_size=bs,
-                num_workers=nw
-            )
 
     def train(self):
         self.model.train()

@@ -8,19 +8,19 @@ method = 'iid'
 
 [learner]
 n = 20
-m = 2
-attack = 'backdoor'
+m = 5
+attack = 'label-flip'
 defense = 'score'
 
 [aggregator]
-n = 10
+n = 3
 m = 1
 attack = 'collusion'
 defense = 'score'
 
 [local]
-dataset = 'imagenette'
-model = 'resnet'
+dataset = 'cifar10'
+model = 'cnn'
 datapath = '~/data'
 device = 'cuda:0'
 n_epochs = 5

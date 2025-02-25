@@ -1,6 +1,7 @@
 from .base import Algorithm
-import numpy as np
-
+# import numpy as np
+import torch
+import statistics as st
 
 class NaiveFl(Algorithm):
     """
@@ -23,11 +24,11 @@ class NaiveFl(Algorithm):
             print(f"{i}..", end="")
         # Print the completion of training information
         print("Finish")
-        print(np.shape(self.learners[0].get_grad()))
+
         # Collect the gradients of all local learners
-        grads = np.vstack([learner.get_grad() for learner in self.learners])
+        grads = torch.stack([learner.get_grad() for learner in self.learners])
         # Aggregate the gradients of all local learners
-        grads_g = np.vstack(
+        grads_g = torch.stack(
             [aggregator.aggregate(grads) for aggregator in self.aggregators]
         )
 
@@ -45,7 +46,7 @@ class NaiveFl(Algorithm):
                     backdoor_accs.append(acc)
 
         # Calculate the average loss and accuracy of all local learners
-        loss, acc = np.mean(losses), np.mean(accs)
+        loss, acc = st.mean(losses), st.mean(accs)
         # Print the test results
         print(f"Avg Loss: {loss}, Acc: {acc}")
         # write to db
@@ -54,7 +55,7 @@ class NaiveFl(Algorithm):
             [self.id, t, r, float(loss), float(acc)],
         )
         if self.cfg.learner.attack == 'backdoor':
-            backdoor_acc = np.mean(backdoor_accs)
+            backdoor_acc = st.mean(backdoor_accs)
             print(f"Backdoor Acc: {backdoor_acc}")
             self.exec_sql(
                 "INSERT INTO backdoors VALUES (%s, %s, %s, %s)",
@@ -76,9 +77,9 @@ class ScoreFl(Algorithm):
         print("Finish")
 
         # Collect the gradients of all local learners
-        grads = np.vstack([learner.get_grad() for learner in self.learners])
+        grads = torch.stack([learner.get_grad() for learner in self.learners])
         # Aggregate the gradients of all local learners
-        grads_g = np.vstack(
+        grads_g = torch.stack(
             [aggregator.aggregate(grads) for aggregator in self.aggregators]
         )
 
@@ -96,7 +97,7 @@ class ScoreFl(Algorithm):
                     loss, acc = learner.test(backdoor=True)
                     backdoor_accs.append(acc)
         # Calculate the average loss and accuracy of all benign learners
-        loss, acc = np.mean(losses), np.mean(accs)
+        loss, acc = st.mean(losses), st.mean(accs)
         print(f"Avg Loss: {loss}, Acc: {acc}")
         # write to db
         self.exec_sql(
@@ -105,14 +106,14 @@ class ScoreFl(Algorithm):
         )
         
         if self.cfg.learner.attack == 'backdoor':
-            backdoor_acc = np.mean(backdoor_accs)
+            backdoor_acc = st.mean(backdoor_accs)
             print(f"Backdoor Acc: {backdoor_acc}")
             self.exec_sql(
                 "INSERT INTO backdoors VALUES (%s, %s, %s, %s)",
                 [self.id, t, r, float(backdoor_acc)],
             )
         
-        rev_scores = np.vstack(
+        rev_scores = torch.stack(
             [learner.get_rev_scores() for learner in self.learners]
         ).T
         for j, aggregator in enumerate(self.aggregators):

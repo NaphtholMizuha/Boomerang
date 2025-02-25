@@ -8,15 +8,15 @@ method = 'iid'
 
 [learner]
 n = 20
-m = 2
-attack = 'backdoor'
+m = 5
+attack = 'label-flip'
 defense = 'none'
 
 [aggregator]
-n = 10
+n = 3
 m = 1
 attack = 'collusion'
-defense = 'krum'
+defense = 'feddmc'
 
 [local]
 dataset = 'imagenette'

@@ -65,6 +65,8 @@ class Algorithm:
                 n_aggr=cfg.aggregator.n,
                 attack=cfg.learner.attack if i < cfg.learner.m else "none",
                 defense=cfg.learner.defense,
+                n_lrn=cfg.learner.n,
+                m_lrn=cfg.learner.m
             )
             for i in range(cfg.learner.n)
         ]

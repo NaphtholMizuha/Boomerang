@@ -1,0 +1,6 @@
+usage: run.py [-h] [-c CONFIG] [-a ALGORITHM] [-t TABLE] [--m-lrn M_LRN]
+              [--m-agg M_AGG] [--lr LR] [--batch-size BATCH_SIZE]
+              [--epochs EPOCHS] [--device DEVICE]
+              [--split-method {iid,dirichlet}] [--split-alpha SPLIT_ALPHA]
+              [--enable-db] [--reset-db]
+run.py: error: unrecognized arguments: copy.toml copy.log

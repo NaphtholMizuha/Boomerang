@@ -1,67 +1,62 @@
-from torch.utils.data import Dataset
+import h5py
 import torch
-import numpy as np
+from torch.utils.data import Dataset
+from torchvision import transforms
+class H5Dataset(Dataset):
+    def __init__(self, file_path, image_key, label_key, transform=None):
+        """
+        初始化 Dataset
+        :param file_path: HDF5 文件路径
+        :param image_key: 图像数据集的键名
+        :param label_key: 标签数据集的键名
+        """
+        self.file_path = file_path
+        self.image_key = image_key
+        self.label_key = label_key
+        self.transform = transform
+        # 打开 HDF5 文件并读取数据集的长度
+        with h5py.File(self.file_path, 'r') as f:
+            self.length = len(f[self.image_key])
 
-class BackDoorDataset(Dataset):
-    def __init__(self, original_dataset, inject_mode):
-        super().__init__()
-        self.original_dataset = original_dataset
-        self.inject_mode = inject_mode
-        
-        if self.inject_mode == "append":
-            self.append_backdoor()
-        elif self.inject_mode == "replace":
-            self.replace_backdoor()
-    
-    def append_backdoor(self):
-        # 复制5%的数据集
-        num_samples = len(self.original_dataset)
-        num_backdoor_samples = int(0.05 * num_samples)
-        
-        # 随机选择5%的样本
-        indices = np.random.choice(num_samples, num_backdoor_samples, replace=False)
-        
-        # 创建新的数据集
-        self.data = []
-        self.labels = []
-        
-        for idx in range(num_samples):
-            img, label = self.original_dataset[idx]
-            if idx in indices:
-                # 在左上角的5%区域替换为紫色像素
-                img = self.apply_backdoor(img)
-                label = 0  # 标签改为0
-            self.data.append(img)
-            self.labels.append(label)
-    
-    def replace_backdoor(self):
-        # 替换所有样本
-        num_samples = len(self.original_dataset)
-        
-        self.data = []
-        self.labels = []
-        
-        for idx in range(num_samples):
-            img, label = self.original_dataset[idx]
-            # 在左上角的5%区域替换为紫色像素
-            img = self.apply_backdoor(img)
-            label = 0  # 标签改为0
-            self.data.append(img)
-            self.labels.append(label)
-    
-    def apply_backdoor(self, img):
-        # 假设img是一个3D tensor (C, H, W)
-        c, h, w = img.shape
-        # 计算左上角5%的区域
-        h_backdoor = int(0.05 * h)
-        w_backdoor = int(0.05 * w)
-        
-        # 替换为紫色像素 (R=255, G=0, B=255)
-        img[:, :h_backdoor, :w_backdoor] = torch.tensor([255, 0, 255]).view(3, 1, 1) / 255.0
-        return img
-    
     def __len__(self):
-        return len(self.data)
-    
+        """返回数据集的大小"""
+        return self.length
+
     def __getitem__(self, idx):
-        return self.data[idx], self.labels[idx]
+        """
+        根据索引返回单个样本
+        :param idx: 索引
+        :return: 图像和标签
+        """
+        with h5py.File(self.file_path, 'r') as f:
+            image = f[self.image_key][idx]  # 读取图像
+            label = f[self.label_key][idx]  # 读取标签
+
+        # 将数据转换为 PyTorch 张量
+        label = torch.tensor(label, dtype=torch.long)
+        
+        if self.transform:
+            image = self.transform(image)
+
+        return image, label
+
+def get_backdoor(path: str, train: bool = True):
+    if train:
+        tf = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+            ),
+        ])
+    else:
+        tf = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+            ),
+        ])
+        
+    if train:
+        return H5Dataset(path, 'train_images', 'train_labels', tf)
+    else:
+        return H5Dataset(path, 'test_images', 'test_labels', tf)
