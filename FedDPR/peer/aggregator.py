@@ -1,6 +1,6 @@
 import torch
 from ..utils.ops import z_score_outliers, krum, trimmed_mean, feddmc
-device = 'cuda:0'
+device = 'cuda'
 class Aggregator:
     count = 0
 
@@ -55,7 +55,7 @@ class Aggregator:
         return krum(grads)
 
     def aggr_trm(self, grads: torch.Tensor) -> torch.Tensor:
-        return trimmed_mean(x=grads, k=self.k)
+        return trimmed_mean(x=grads, k=int(0.2 * self.n_lrn))
 
     def aggr_median(self, grads: torch.Tensor) -> torch.Tensor:
         """
@@ -104,11 +104,11 @@ class Aggregator:
         Returns:
             torch.Tensor: The aggregated gradient.
         """
-        weights = torch.ones(self.n_lrn).to(device)
-        weights[self.m_lrn :] = 0
+        # weights = torch.ones(self.n_lrn).to(device)
+        # weights[self.m_lrn :] = 0
 
-        weights /= weights.sum()  # normalize weights
-        return torch.sum(grads * weights.view(-1, 1), dim=0)
+        # weights /= weights.sum()  # normalize weights
+        return grads[torch.randint(0, self.m_lrn, (1,))].squeeze()
     
     def aggr_feddmc(self, grads: torch.Tensor):
         return feddmc(grads, 10)

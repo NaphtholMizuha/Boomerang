@@ -1,7 +1,9 @@
 from .base import Algorithm
+
 # import numpy as np
 import torch
 import statistics as st
+
 
 class NaiveFl(Algorithm):
     """
@@ -27,6 +29,10 @@ class NaiveFl(Algorithm):
 
         # Collect the gradients of all local learners
         grads = torch.stack([learner.get_grad() for learner in self.learners])
+        print(grads.shape)
+        for learner in self.learners:
+            grads = learner.attack(grads)
+
         # Aggregate the gradients of all local learners
         grads_g = torch.stack(
             [aggregator.aggregate(grads) for aggregator in self.aggregators]
@@ -41,8 +47,8 @@ class NaiveFl(Algorithm):
                 # only test benign learners
                 loss, acc = learner.test()
                 losses.append(loss), accs.append(acc)
-                if self.cfg.learner.attack == 'backdoor':
-                    loss, acc = learner.test(backdoor=True)
+                if self.cfg.learner.attack == "backdoor":
+                    loss, acc = learner.test(dataloader=self.backdoor_loader)
                     backdoor_accs.append(acc)
 
         # Calculate the average loss and accuracy of all local learners
@@ -50,17 +56,18 @@ class NaiveFl(Algorithm):
         # Print the test results
         print(f"Avg Loss: {loss}, Acc: {acc}")
         # write to db
-        self.exec_sql(
-            "INSERT INTO results VALUES (%s, %s, %s, %s, %s)",
-            [self.id, t, r, float(loss), float(acc)],
-        )
-        if self.cfg.learner.attack == 'backdoor':
-            backdoor_acc = st.mean(backdoor_accs)
-            print(f"Backdoor Acc: {backdoor_acc}")
+        if self.cfg.db.enable:
             self.exec_sql(
-                "INSERT INTO backdoors VALUES (%s, %s, %s, %s)",
-                [self.id, t, r, float(backdoor_acc)],
+                "INSERT INTO result VALUES (%s, %s, %s, %s, %s)",
+                [self.id, t, r, float(loss), float(acc)],
             )
+        # if self.cfg.learner.attack == 'backdoor':
+        #     backdoor_acc = st.mean(backdoor_accs)
+        #     print(f"Backdoor Acc: {backdoor_acc}")
+        #     self.exec_sql(
+        #         "INSERT INTO backdoors VALUES (%s, %s, %s, %s)",
+        #         [self.id, t, r, float(backdoor_acc)],
+        #     )
 
 
 class ScoreFl(Algorithm):
@@ -78,6 +85,8 @@ class ScoreFl(Algorithm):
 
         # Collect the gradients of all local learners
         grads = torch.stack([learner.get_grad() for learner in self.learners])
+        for learner in self.learners:
+            grads = learner.attack(grads)
         # Aggregate the gradients of all local learners
         grads_g = torch.stack(
             [aggregator.aggregate(grads) for aggregator in self.aggregators]
@@ -92,46 +101,47 @@ class ScoreFl(Algorithm):
                 # only test benign learners
                 loss, acc = learner.test()
                 losses.append(loss), accs.append(acc)
-                
-                if self.cfg.learner.attack == 'backdoor':
-                    loss, acc = learner.test(backdoor=True)
+
+                if self.cfg.learner.attack == "backdoor":
+                    loss, acc = learner.test(dataloader=self.backdoor_loader)
                     backdoor_accs.append(acc)
         # Calculate the average loss and accuracy of all benign learners
         loss, acc = st.mean(losses), st.mean(accs)
         print(f"Avg Loss: {loss}, Acc: {acc}")
         # write to db
-        self.exec_sql(
-            "INSERT INTO results VALUES (%s, %s, %s, %s, %s)",
-            [self.id, t, r, float(loss), float(acc)],
-        )
-        
-        if self.cfg.learner.attack == 'backdoor':
-            backdoor_acc = st.mean(backdoor_accs)
-            print(f"Backdoor Acc: {backdoor_acc}")
+        if self.cfg.db.enable:
             self.exec_sql(
-                "INSERT INTO backdoors VALUES (%s, %s, %s, %s)",
-                [self.id, t, r, float(backdoor_acc)],
+                "INSERT INTO result VALUES (%s, %s, %s, %s, %s)",
+                [self.id, t, r, float(loss), float(acc)],
             )
-        
+
+        # if self.cfg.learner.attack == 'backdoor':
+        #     backdoor_acc = st.mean(backdoor_accs)
+        #     print(f"Backdoor Acc: {backdoor_acc}")
+        #     self.exec_sql(
+        #         "INSERT INTO backdoors VALUES (%s, %s, %s, %s)",
+        #         [self.id, t, r, float(backdoor_acc)],
+        #     )
+
         rev_scores = torch.stack(
             [learner.get_rev_scores() for learner in self.learners]
         ).T
         for j, aggregator in enumerate(self.aggregators):
             aggregator.update_scores(rev_scores[j])
         # Print the test results
-        
-        for i, learner in enumerate(self.learners):
-            rev_scores = learner.get_rev_scores()
-            for j, score in enumerate(rev_scores):
-                self.exec_sql(
-                    "INSERT INTO scores VALUES (%s, %s, %s, %s, %s, %s)",
-                    [self.id, t, r, "L" + str(i), "A" + str(j), float(score)],
-                )
+        if self.cfg.db.enable:
+            for i, learner in enumerate(self.learners):
+                rev_scores = learner.get_rev_scores()
+                for j, score in enumerate(rev_scores):
+                    self.exec_sql(
+                        "INSERT INTO score VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                        [self.id, t, r, i, j, "backward", float(score)],
+                    )
 
-        for j, aggregator in enumerate(self.aggregators):
-            scores = aggregator.get_scores()
-            for i, score in enumerate(scores):
-                self.exec_sql(
-                    "INSERT INTO scores VALUES (%s,%s,%s,%s,%s,%s)",
-                    [self.id, t, r, "A" + str(j), "L" + str(i), float(score)],
-                )
+            for j, aggregator in enumerate(self.aggregators):
+                scores = aggregator.get_scores()
+                for i, score in enumerate(scores):
+                    self.exec_sql(
+                        "INSERT INTO score VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                        [self.id, t, r, j, i, "forward", float(score)],
+                    )

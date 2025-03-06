@@ -1,7 +1,7 @@
 from ..training.trainer import Trainer
 from typing import Dict, Tuple
 import torch
-from ..utils.ops import krum, trimmed_mean
+from ..utils.ops import krum, trimmed_mean, feddmc
 from math import floor
 from scipy.stats import norm
 StateDict = Dict[str, torch.Tensor]
@@ -11,11 +11,12 @@ StateTemplate = Dict[str, Tuple[int, ...]]
 
 
 class Learner:
-    grad_lie_list = []
-    grad_lie = None
-    
+    count = 0
+    is_lie_finished = False
+    history = []
+    last = None
     def __init__(
-        self, n_epoch: int, init_state: dict, trainer: Trainer, n_aggr: int, attack: str, defense: str, n_lrn: int, m_lrn: int
+        self, n_epoch: int, init_state: dict, trainer: Trainer, n_aggr: int, attack: str, defense: str, n_lrn: int, m_lrn: int, **kwargs
     ) -> None:
         self.state = self.flat(init_state)
         self.shapes = {key: value.shape for key, value in init_state.items()}
@@ -28,11 +29,18 @@ class Learner:
         self.dfn = defense
         self.n_lrn = n_lrn
         self.m_lrn = m_lrn
+        self.backdoor_rnd = kwargs.get('backdoor_rnd', 30)
+        self.backdoor_epoch = kwargs.get('backdoor_epoch', 30)
+        self.rnd = 0
+        self.id = Learner.count
+        self.max_history = kwargs.get('max_history', 5)
+        Learner.count += 1
         
         if self.atk == 'label-flip':
-            self.trainer.label_flip(1)
-        elif self.atk == 'backdoor':
-            self.trainer.train_loader = self.trainer.backdoor_train_loader
+            self.trainer.label_flip(5)
+    
+    def __del__(self):
+        Learner.count -= 1
 
     @staticmethod
     def flat(x: StateDict) -> torch.Tensor:
@@ -60,16 +68,17 @@ class Learner:
         return state
 
     def local_train(self):
-        if Learner.grad_lie is not None:
-            Learner.grad_lie = None
+        Learner.is_lie_finished = False
             
-        self.trainer.train_epochs(self.n_epoch)
+        if self.atk == 'backdoor':
+            self.trainer.train_backdoor_epochs(self.n_epoch)
+        else:
+            self.trainer.train_epochs(self.n_epoch)
         
-        if self.atk == 'lie':
-            Learner.grad_lie_list.append(self.get_raw_grad())
+        self.rnd += 1
 
-    def test(self, backdoor=False):
-        self.loss, self.acc = self.trainer.test(backdoor)
+    def test(self, dataloader=None):
+        self.loss, self.acc = self.trainer.test(dataloader=dataloader)
         return self.loss, self.acc
 
     def get_weight(self):
@@ -85,26 +94,26 @@ class Learner:
         return newer - self.state
     
     def get_grad(self):
-        return self.attack(self.get_raw_grad())
+        return self.get_raw_grad()
     
-    def attack(self, x):
-        if self.atk == 'none' or self.atk == 'label-flip' or self.atk == 'backdoor':
-            return x
+    def attack(self, grads):
+        if self.atk == 'none' or self.atk == 'label-flip':
+            return grads
         elif self.atk == 'ascent':
-            return -x
+            grads[self.id] = -grads[self.id]
+            return grads
         elif self.atk == 'lie':
-            if Learner.grad_lie is None:
+            if not Learner.is_lie_finished:
                 # the first attacker do
-                grad_lie_tensor = torch.stack(Learner.grad_lie_list)
-                
+                grad_lie_tensor = grads[:self.m_lrn]
                 n_supp = floor(self.n_lrn / 2 + 1) - self.m_lrn
                 phi_z = (self.n_lrn - self.m_lrn - n_supp) / (self.n_lrn - self.m_lrn)
                 z = norm.ppf(phi_z)
                 sigma, mu = torch.std_mean(grad_lie_tensor, dim=0)
-                Learner.grad_lie = mu - z * sigma
-                Learner.grad_lie_list.clear()
+                grads[:self.m_lrn] = mu - z * sigma
                 
-            return Learner.grad_lie
+                Learner.is_lie_finished = True
+            return grads
         
     def aggregate(self, grads: torch.Tensor):
         if self.dfn == 'none':
@@ -118,13 +127,25 @@ class Learner:
             return torch.sum(grads * weights.unsqueeze(1), dim=0)
         elif self.dfn == 'krum':
             return krum(grads)
+        elif self.dfn == 'feddmc':
+            return feddmc(grads, 10)
 
     def set_grad(self, grad: torch.Tensor):
         self.state = grad + self.state
+        
+        if self.atk == 'fedghost' and self.id == 0:
+            if Learner.last is None:
+                Learner.last = {'grad': grad, 'weight': self.state}
+            else:
+                Learner.history.append({'grad': grad - Learner.last['grad'], 'weight': self.state - Learner.last['weight']})
+                while len(Learner.history) > self.max_history:
+                    Learner.history.pop(0)
+                
         statedict = self.unflat(self.state, self.shapes)
         self.trainer.set_state(statedict)
 
     def set_grads(self, grads: torch.Tensor):
+        grads = grads.clone()
         self.set_grad(self.aggregate(grads))
 
     def update_scores(self, grads: torch.Tensor):
@@ -156,3 +177,15 @@ class Learner:
 
     def get_rev_scores(self) -> torch.Tensor:
         return self.rev_scores
+    
+    def fedghost(self):
+        if self.id == 0:
+            # compute delta_w and delta_g
+            delta_w = torch.stack([x['weight'] for x in Learner.history])
+            delta_g = torch.stack([x['grad'] for x in Learner.history])
+            dw_last, dg_last = delta_w[-1, :], delta_g[-1, :]
+            mat_w = delta_w.T.matmul(delta_w)
+            mat_g = delta_w.T.matmul(delta_g)
+            upper = mat_g.triu()
+            lower = mat_g - upper
+            xi = dg_last.dot(dw_last) / dw_last.dot(dw_last)

@@ -19,6 +19,7 @@ class DBConfig:
     user: str
     password: str
     reset: bool
+    name: str
     
 @dataclass
 class LocalConfig:

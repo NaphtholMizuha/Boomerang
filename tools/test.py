@@ -7,7 +7,7 @@ import os
 
 path = os.path.expanduser('~/data')
 # 获取数据集
-trainset, testset = fetch_dataset(path, 'imagenette-backdoor')
+trainset, testset = fetch_dataset(path, 'cifar10-backdoor')
 
 # 从训练集中随机抽取八张图片
 indices = random.sample(range(len(trainset)), 8)

@@ -14,9 +14,9 @@ def fetch_dataset(path: str, dataset: str) -> tuple[Dataset, Dataset]:
         return get_fmnist(path, True), get_fmnist(path, False)
     elif dataset == 'cifar10-backdoor':
         path = os.path.expanduser(path)
-        return get_backdoor(os.path.join(path, 'cifar10_backdoor.h5'), True), get_backdoor(os.path.join(path, 'cifar10_backdoor.h5'), False)
+        return get_backdoor(os.path.join(path, 'cifar10_backdoor'), True), get_backdoor(os.path.join(path, 'cifar10_backdoor'), False)
     elif dataset == 'imagenette-backdoor':
         path = os.path.expanduser(path)
-        return get_backdoor(os.path.join(path, 'imagenette_backdoor.h5'), True), get_backdoor(os.path.join(path, 'imagenette_backdoor.h5'), False)
+        return get_backdoor(os.path.join(path, 'imagenette_backdoor'), True), get_backdoor(os.path.join(path, 'imagenette_backdoor'), False)
     else:
         raise Exception(f"Unsupported Dataset: {dataset}")
