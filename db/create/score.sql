@@ -4,11 +4,9 @@ CREATE TABLE score (
     id INT,
     turn INT,
     rnd INT,
-    src INT,
-    dest INT,
     dir dir_enum,
-    score FLOAT,
-    PRIMARY KEY (id, turn, rnd, src, dest, dir),
+    scores BYTEA,
+    PRIMARY KEY (id, turn, rnd, dir),
     CONSTRAINT fk_config
         FOREIGN KEY (id)
         REFERENCES config (id)

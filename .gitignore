@@ -1,2 +1,4 @@
 config/
 log/
+figure/
+*.session.sql

@@ -1,5 +1,5 @@
 from .aggregator import Aggregator
-from .learner import Learner
+from .attacker import Attacker
 
 
-__all__ = ["Aggregator", "Learner"]
+__all__ = ["Aggregator", "Attacker"]

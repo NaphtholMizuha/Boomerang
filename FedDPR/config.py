@@ -46,8 +46,8 @@ class Config:
     local: LocalConfig
     split: SplitConfig
     penalty: float
-    learner: PeerConfig
-    aggregator: PeerConfig
+    server: PeerConfig
+    client: PeerConfig
     n_rounds: int
     n_turns: int
     db: DBConfig

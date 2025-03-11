@@ -1,4 +1,4 @@
-from FedDPR.algorithm import fetch_algorithm
+from FedDPR.algorithm import Algorithm
 from FedDPR.config import toml2cfg
 import argparse
 
@@ -43,7 +43,7 @@ def main():
     if args.m_agg is not None:
         cfg.aggregator.n_malicious = args.m_agg
     
-    alg = fetch_algorithm(cfg)
+    alg = Algorithm(cfg)
     alg.run()
     
 if __name__ == "__main__":

@@ -1,135 +1,91 @@
 import torch
-from ..utils.ops import z_score_outliers, krum, trimmed_mean, feddmc
-device = 'cuda'
-class Aggregator:
-    count = 0
+from FedDPR.utils.btbcn import BinaryClusterTree
 
-    def __init__(self, n_lrn, type, **kwargs) -> None:
-        self.n_lrn = n_lrn
-        self.type = type
-        self.scores = torch.ones(n_lrn).to('cuda')
+class Aggregator:
+    def __init__(self, n, m, method, device, **kwargs):
+        self.n = n
+        self.m = m
+        self.method = method
+        self.device = device
         for k, v in kwargs.items():
             setattr(self, k, v)
-
-        if type == "none":
-            self.aggregate = self.aggr_avg
-        elif type == "krum":
-            self.aggregate = self.aggr_krum
-        elif type == "trm":
-            self.aggregate = self.aggr_trm
-        elif type == "median":
-            self.aggregate = self.aggr_median
-        elif type == "score":
-            self.aggregate = self.aggr_score
-        elif type == "ascent":
-            self.aggregate = self.aggr_asc
-        elif type == "collusion":
-            self.aggregate = self.aggr_coll
-        elif type == "feddmc":
-            self.aggregate = self.aggr_feddmc
-        else:
-            raise ValueError(f"Unknown type: {type}")
-
-    def aggr_avg(self, grads: torch.Tensor) -> torch.Tensor:
-        """
-        Aggregates gradients using the average method.
-
-        Args:
-            grads (torch.Tensor): The gradients to be aggregated.
-
-        Returns:
-            torch.Tensor: The aggregated gradient.
-        """
-        return torch.mean(grads, dim=0)
-
-    def aggr_krum(self, grads: torch.Tensor) -> torch.Tensor:
-        """
-        Aggregates gradients using the Krum method.
-
-        Args:
-            grads (torch.Tensor): The gradients to be aggregated.
-
-        Returns:
-            torch.Tensor: The aggregated gradient.
-        """
-        return krum(grads)
-
-    def aggr_trm(self, grads: torch.Tensor) -> torch.Tensor:
-        return trimmed_mean(x=grads, k=int(0.2 * self.n_lrn))
-
-    def aggr_median(self, grads: torch.Tensor) -> torch.Tensor:
-        """
-        Aggregates gradients using the median method.
-
-        Args:
-            grads (torch.Tensor): The gradients to be aggregated.
-
-        Returns:
-            torch.Tensor: The aggregated gradient.
-        """
-        return torch.median(grads, dim=0).values
-
-    def aggr_score(self, grads: torch.Tensor) -> torch.Tensor:
-        """
-        Aggregates gradients using a score-based method.
-
-        Args:
-            grads (torch.Tensor): The gradients to be aggregated.
-
-        Returns:
-            torch.Tensor: The aggregated gradient.
-        """
-        weights = self.scores / self.scores.sum()
-        return torch.sum(grads * weights.view(-1, 1), dim=0)
-
-    def aggr_asc(self, grads: torch.Tensor) -> torch.Tensor:
-        """
-        Aggregates gradients using the ascent method.
-
-        Args:
-            grads (torch.Tensor): The gradients to be aggregated.
-
-        Returns:
-            torch.Tensor: The aggregated gradient.
-        """
-        return -self.aggr_avg(grads)
-
-    def aggr_coll(self, grads: torch.Tensor) -> torch.Tensor:
-        """
-        Aggregates gradients using the collusion method.
-
-        Args:
-            grads (torch.Tensor): The gradients to be aggregated.
-
-        Returns:
-            torch.Tensor: The aggregated gradient.
-        """
-        # weights = torch.ones(self.n_lrn).to(device)
-        # weights[self.m_lrn :] = 0
-
-        # weights /= weights.sum()  # normalize weights
-        return grads[torch.randint(0, self.m_lrn, (1,))].squeeze()
+        if method == 'bds' and self.is_server:
+            self.fwd_scores = torch.ones(self.n).to(self.device)
+            # self.fwd_scores = torch.rand(self.n).to(self.device)
+            
+    def set_local_grad(self, local_grad: torch.Tensor):
+        self.local_grad = local_grad.clone()
+        
+    def get_fwd_scores(self):
+        return self.fwd_scores    
+        
+    def get_bwd_scores(self):
+        return self.bwd_scores
     
-    def aggr_feddmc(self, grads: torch.Tensor):
-        return feddmc(grads, 10)
-
-
-    def update_scores(self, rev_scores: torch.Tensor) -> None:
-        """
-        Updates the scores based on the given review scores.
-
-        Args:
-            rev_scores (torch.Tensor): The review scores to update the scores with.
-        """
-        pred = z_score_outliers(rev_scores, 2)
-        factor = torch.where(pred, self.penalty, 1)
-        self.scores *= factor
-
-    def get_scores(self) -> torch.Tensor:
-        """
-        Returns the current scores.
-
-        Returns:
-            torch.Tensor: The current scores.
-        """
-        return self.scores
+    def update_fwd_scores(self, bwd_scores: torch.Tensor):
+        pred = self.z_score_outliers(bwd_scores, 1)
+        factors = torch.where(pred, self.penalty, 1.25)
+        self.fwd_scores *= factors
+        
+    def aggregate(self, grads: torch.Tensor):
+        grads = grads.clone()
+        match self.method:
+            case 'none':
+                return grads.mean(dim=0)
+            case 'median':
+                return grads.median(dim=0).values
+            case 'trm':
+                return self.trimmed_mean(grads)
+            case 'krum':
+                return self.krum(grads)
+            case 'feddmc':
+                return self.fed_dmc(grads)
+            case 'bds':
+                if self.is_server:
+                    return self.bds_server(grads)
+                else:
+                    return self.bds_client(grads)
+            case 'collusion':
+                return self.collude(grads)
+    
+    def collude(self, grads: torch.Tensor):
+        return grads[torch.randint(0, self.m, (1,))].squeeze()         
+    
+    def trimmed_mean(self, grads: torch.Tensor, prop=0.8):
+        k = int(grads.shape[0] * prop)
+        sorted_grads, _ = torch.sort(grads, dim=0)
+        trimmed_grads = sorted_grads[k : -k, :]
+        return torch.mean(trimmed_grads, dim=0)
+    
+    def krum(self, grads: torch.Tensor):
+        dist_mat = torch.cdist(grads, grads)
+        dist_vec = torch.sum(dist_mat, dim=1)
+        target = torch.argmin(dist_vec)
+        return grads[target].squeeze()
+    
+    def fed_dmc(self, grads: torch.Tensor, k=5, min_clu_size=2):
+        u_mat, s_mat, _ = torch.pca_lowrank(grads, q=k)
+        x_proj = u_mat.matmul(torch.diag(s_mat)).to('cpu')
+        bct = BinaryClusterTree(min_clu_size)
+        bct.fit(x_proj)
+        benign, _, _ = bct.classify()
+        
+        return torch.mean(grads[benign], dim=0)
+    
+    def bds_server(self, grads: torch.Tensor):     
+        weights = (self.fwd_scores / self.fwd_scores.sum()).unsqueeze(-1)
+        return torch.sum(grads * weights, dim=0)
+    
+    def bds_client(self, grads: torch.Tensor):
+        prod = grads.matmul(self.local_grad)
+        norm1 = grads.norm(p=2, dim=1)
+        norm2 = self.local_grad.norm(p=2)
+        
+        self.bwd_scores = torch.exp(prod / (norm1 * norm2))
+        weights = (self.bwd_scores / self.bwd_scores.sum()).unsqueeze(-1)
+        return torch.sum(grads * weights, dim=0)
+    
+    @staticmethod
+    def z_score_outliers(x: torch.Tensor, thr=3):
+        z_scores = (x - x.mean()) / x.std()
+        return torch.abs(z_scores) > thr
