@@ -10,8 +10,7 @@ class Aggregator:
         for k, v in kwargs.items():
             setattr(self, k, v)
         if method == 'bds' and self.is_server:
-            self.fwd_scores = torch.ones(self.n).to(self.device)
-            # self.fwd_scores = torch.rand(self.n).to(self.device)
+            self.fwd_scores = torch.rand(self.n).to(self.device)
             
     def set_local_grad(self, local_grad: torch.Tensor):
         self.local_grad = local_grad.clone()
@@ -23,9 +22,13 @@ class Aggregator:
         return self.bwd_scores
     
     def update_fwd_scores(self, bwd_scores: torch.Tensor):
-        pred = self.z_score_outliers(bwd_scores, 1)
-        factors = torch.where(pred, self.penalty, 1.25)
-        self.fwd_scores *= factors
+        pred = self.z_score_detect(bwd_scores, 1)
+        mult = torch.where(pred, self.penalty, 1)
+        add = torch.where(pred, 0, 1)
+        # print(diffs)
+        self.fwd_scores *= mult
+        self.fwd_scores += add
+        
         
     def aggregate(self, grads: torch.Tensor):
         grads = grads.clone()
@@ -49,7 +52,9 @@ class Aggregator:
                 return self.collude(grads)
     
     def collude(self, grads: torch.Tensor):
-        return grads[torch.randint(0, self.m, (1,))].squeeze()         
+        grads_g = grads[torch.randint(0, self.m, (1,))].squeeze()
+        print('||grads_g|| = ', grads_g.norm(dim=0))
+        return grads_g
     
     def trimmed_mean(self, grads: torch.Tensor, prop=0.8):
         k = int(grads.shape[0] * prop)
@@ -72,20 +77,35 @@ class Aggregator:
         
         return torch.mean(grads[benign], dim=0)
     
-    def bds_server(self, grads: torch.Tensor):     
+    def bds_server(self, grads: torch.Tensor): 
+        norm1 = grads.norm(dim=1)
+        print(f'grads norm: {norm1} @ {norm1.shape}')    
         weights = (self.fwd_scores / self.fwd_scores.sum()).unsqueeze(-1)
-        return torch.sum(grads * weights, dim=0)
+        grad_g = torch.sum(grads * weights, dim=0)
+        norm2 = grad_g.norm()
+        print('grad_g norm:', norm2, ' @ ', {norm2.shape})
+        return grad_g
     
     def bds_client(self, grads: torch.Tensor):
         prod = grads.matmul(self.local_grad)
         norm1 = grads.norm(p=2, dim=1)
         norm2 = self.local_grad.norm(p=2)
         
-        self.bwd_scores = torch.exp(prod / (norm1 * norm2))
-        weights = (self.bwd_scores / self.bwd_scores.sum()).unsqueeze(-1)
-        return torch.sum(grads * weights, dim=0)
+        cos_sim = self.normalize(torch.exp(prod / (norm1 * norm2)))
+        norm_sim = 1 - torch.abs(norm1 - norm2) / (norm1 + norm2)
+        self.bwd_scores = norm_sim * cos_sim
+        inliers = self.z_score_detect(self.bwd_scores, 1, inlier=True)
+        print(inliers)
+        return torch.mean(grads[inliers], dim=0)
     
     @staticmethod
-    def z_score_outliers(x: torch.Tensor, thr=3):
+    def normalize(x: torch.Tensor):
+        return x / torch.sum(x)
+    
+    @staticmethod
+    def z_score_detect(x: torch.Tensor, thr=3, inlier=False):
         z_scores = (x - x.mean()) / x.std()
-        return torch.abs(z_scores) > thr
+        if inlier:
+            return torch.abs(z_scores) <= thr
+        else:
+            return torch.abs(z_scores) > thr

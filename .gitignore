@@ -1,4 +1,6 @@
 config/
 log/
 figure/
-*.session.sql
+fedbds.session.sql
+__pycache__/
+*.pyc

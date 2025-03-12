@@ -5,7 +5,7 @@ CREATE TABLE score (
     turn INT,
     rnd INT,
     dir dir_enum,
-    scores BYTEA,
+    val FLOAT[][],
     PRIMARY KEY (id, turn, rnd, dir),
     CONSTRAINT fk_config
         FOREIGN KEY (id)

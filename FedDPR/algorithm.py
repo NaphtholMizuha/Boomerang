@@ -148,9 +148,7 @@ class Algorithm:
         
         
         # step 2: gather all local grads and attack
-        grads_l = torch.stack([
-            trainer.get_grad() for trainer in self.trainers
-        ])
+        grads_l = torch.stack([trainer.get_grad() for trainer in self.trainers])
         grads_l = self.attacker.attack(grads_l)
         
         # step 2.5: note local gradients for FedBDS
@@ -195,24 +193,14 @@ class Algorithm:
             
             if is_bds:
                 mal = self.cfg.server.m
-                # data = [
-                #     (self.id, t, r, i+mal, j, "forward", float(score))
-                #     for i, server in enumerate(self.agg_servers[mal:])
-                #     for j, score in enumerate(server.get_fwd_scores())
-                # ] + [
-                #     (self.id, t, r, i, j, "backward", float(score))
-                #     for i, client in enumerate(self.agg_clients)
-                #     for j, score in enumerate(client.get_bwd_scores())
-                # ]
                 
-                # self.query_sql("INSERT INTO score VALUES %s", data, is_many=True)
                 bwd_scores = torch.stack([
                     client.get_bwd_scores() for client in self.agg_clients
-                ]).cpu().numpy().tobytes()
+                ]).cpu().numpy().tolist()
                 
                 fwd_scores = torch.stack([
                     server.get_fwd_scores() for server in self.agg_servers[mal:]
-                ]).cpu().numpy().tobytes()
+                ]).cpu().numpy().tolist()
                 
                 self.query_sql("INSERT INTO score VALUES (%s,%s,%s,%s,%s)", [self.id, t, r, 'forward', fwd_scores])
                 self.query_sql("INSERT INTO score VALUES (%s,%s,%s,%s,%s)", [self.id, t, r, 'backward', bwd_scores])
