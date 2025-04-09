@@ -1,5 +1,6 @@
 from scipy.cluster.hierarchy import linkage
 from collections import deque
+import torch
         
 class TreeNode:
     def __init__(self, idx, left=None, right=None, distance=0.0, size=1):
@@ -46,6 +47,7 @@ class BinaryClusterTree:
         
     def fit(self, x):
         n_samples, _ = x.shape
+        x = torch.where(torch.isfinite(x), x, 1e10)
         linkage_matrix = linkage(x, method='average')
         self.root = self._build_tree(linkage_matrix, n_samples)
         return self.root

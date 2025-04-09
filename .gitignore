@@ -1,6 +1,9 @@
 config/
 log/
+logs/
 figure/
+tools/
 fedbds.session.sql
 __pycache__/
 *.pyc
+test.py

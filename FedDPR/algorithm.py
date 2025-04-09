@@ -5,13 +5,13 @@ from FedDPR.training import (
     fetch_datasplitter,
     fetch_model,
 )
+# from FedDPR.utils.timer import Timer
 from FedDPR.peer import Aggregator, Attacker
 from dataclasses import asdict
 import json
 import psycopg2
 from psycopg2.extras import execute_values
 import torch
-from copy import deepcopy
 from statistics import mean
 
 class Algorithm:
@@ -65,9 +65,16 @@ class Algorithm:
         for t in range(self.cfg.n_turns):
             # Run the specified number of rounds for each turn
             self.reset()
+
+            # for r in range(self.cfg.n_rounds // 2):
+            #     print(f"Pre-round {r + 1}/{self.cfg.n_rounds // 2}")
+            #     self.run_a_round(t, r, write_db=False)
+            # if self.cfg.client.attack == 'min-sum':
+            #     self.soft_reset()
             for r in range(self.cfg.n_rounds):
                 print(f"Round {r + 1}/{self.cfg.n_rounds}")
                 self.run_a_round(t, r)
+            # print(f"Aggregation Time: {mean(self.aggr_time)}")
 
     def query_sql(self, sql, params, is_many=False):
         # Execute SQL queries if the database is enabled
@@ -83,11 +90,16 @@ class Algorithm:
                         execute_values(cur, sql, params)
                     if "RETURNING" in sql.upper():
                         return cur.fetchone()[0]
-                    
+
+    def soft_reset(self):
+        for trainer in self.trainers:
+            trainer.state = self.init_state
+            trainer.model.load_state_dict(self.init_model.state_dict())
 
     def reset(self):
         cfg = self.cfg
-        init_model = fetch_model(self.cfg.local.model).to(self.cfg.local.device)
+        self.init_model = fetch_model(self.cfg.local.model).to(self.cfg.local.device)
+        self.init_state = Trainer.flat(self.init_model.state_dict())
         models = [
             fetch_model(cfg.local.model).to(cfg.local.device)
             for _ in range(cfg.client.n)
@@ -96,7 +108,7 @@ class Algorithm:
         self.trainers = [
             Trainer(
                 model=models[i],
-                init_state=deepcopy(init_model.state_dict()),
+                init_state=self.init_model.state_dict(),
                 train_set=self.train_subsets[i],
                 test_set=self.test_set,
                 device=cfg.local.device,
@@ -135,9 +147,12 @@ class Algorithm:
             )
             for i in range(cfg.client.n)
         ]
+        # self.train_times = []
+        # self.bs_times = []
+        self.aggr_time = []
 
-    def run_a_round(self, t, r):
-        is_bds = (self.cfg.client.defense == 'bds') and (self.cfg.server.defense == 'bds')
+    def run_a_round(self, t, r, write_db=True):
+        is_bds = (self.cfg.client.defense.startswith('bds')) and (self.cfg.server.defense.startswith('bds'))
         
         # step 1: locally train
         print("Client ", end="")
@@ -145,7 +160,7 @@ class Algorithm:
             trainer.local_train(self.cfg.local.n_epochs)
             print(f"{i}...", end="")
         print("Finish")
-        
+
         
         # step 2: gather all local grads and attack
         grads_l = torch.stack([trainer.get_grad() for trainer in self.trainers])
@@ -156,36 +171,49 @@ class Algorithm:
             for client, grad in zip(self.agg_clients, grads_l.unbind(0)):
                 client.set_local_grad(grad)
         
+
         # step 3: aggregate by servers
         grads_g = torch.stack([
             server.aggregate(grads_l) for server in self.agg_servers
         ])
-        
+
         # step 4: aggregate by clients
         for client, trainer in zip(self.agg_clients, self.trainers):
             grad = client.aggregate(grads_g)
             trainer.set_grad(grad)
-            
+
         # step 4.5: update scores for FedBDS
         if is_bds:
             bwd_scores = torch.stack([
                 client.get_bwd_scores() for client in self.agg_clients
             ]).T
             
-            # print(bwd_scores)
+            # cos_sim = torch.stack([
+            #     client.cos_sim for client in self.agg_clients
+            # ]).T
+            
+            # euclid_sim = torch.stack([
+            #     client.euclid_sim for client in self.agg_clients
+            # ]).T
+            
+            # print(f'q: {bwd_scores}\ncos_sim: {cos_sim}\neuclid_sim: {euclid_sim}')
             
             for i, (server, scores) in enumerate(zip(self.agg_servers, bwd_scores.unbind(0))):
                 if i >= self.cfg.server.m:
                     server.update_fwd_scores(scores)
                     # print(server.fwd_scores)
                     
+        if self.cfg.client.attack == 'fedghost':
+            self.attacker.update_w_cur(self.trainers[0].state.clone())
+                    
             
         
         loss, acc = zip(*[trainer.test() for trainer in self.trainers[self.cfg.client.m:]])
+        print(acc)
         loss, acc = mean(loss), mean(acc)
         print(f"Benign clients avg. loss: {loss}, acc: {acc}")
         
-        if self.cfg.db.enable:
+        if self.cfg.db.enable and write_db:
             self.query_sql(
                 "INSERT INTO result VALUES (%s,%s,%s,%s,%s)",
                 [self.id, t, r, loss, acc]

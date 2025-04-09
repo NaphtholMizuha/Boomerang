@@ -12,7 +12,8 @@ class Trainer:
         self.train_loader = DataLoader(train_set, batch_size=bs, num_workers=nw, shuffle=True)
         self.test_loader = DataLoader(test_set, batch_size=bs, num_workers=nw)
         self.criterion = nn.CrossEntropyLoss().to(device)
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr, momentum=0.9)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
+        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr, momentum=0.9)
         self.device = device
         self.offset = 0
         self.lr = lr
@@ -84,8 +85,7 @@ class Trainer:
                 w_list.append(w_i)
         return torch.cat(w_list)
 
-    @staticmethod
-    def unflat(x: torch.Tensor, shapes: StateTemplate) -> StateDict:
+    def unflat(self, x: torch.Tensor, shapes: StateTemplate) -> StateDict:
         state = {}
         start_idx = 0
 
@@ -94,7 +94,7 @@ class Trainer:
             if len(shape) != 0:
                 size = torch.prod(torch.tensor(shape))
                 # print(size)
-                slice = x[start_idx : start_idx + size].reshape(shape)
+                slice = x[start_idx : start_idx + size].reshape(shape).to(self.device)
                 state[key] = slice
                 start_idx += size
 

@@ -1,0 +1,36 @@
+n_rounds = 80
+penalty = 0.5
+n_turns = 3
+
+[split]
+method = 'dir' # ['dir', 'iid']
+alpha = 0.1 # comment this line if method = 'iid'
+
+[client]
+n = 20 # number of all clients
+m = 5 # number of malicious clients
+attack = 'min-max-std' # ['min-max-std', 'min-sum-std', 'fedghost', 'none']
+defense = 'bds' # ['bds' (for our work), 'trm' (for Trimmed-Mean), 'median', 'feddmc', 'krum', 'none']
+
+[server]
+n = 5
+m = 1
+attack = 'collusion' # ['none', 'collusion']
+defense = 'bds' # ['bds' (for our work), 'none']
+
+[local]
+dataset = 'imagenette' # ['imagenette', 'cifar10']
+model = 'shufflenet' # ['shufflenet', 'lenet']
+lr = 0.01
+datapath = '~/data'
+device = 'cuda:1'
+n_epochs = 5
+batch_size = 32
+num_workers = 2
+
+[db]
+enable = true # set true if database storage is needed
+user = 'YOUR_USER_NAME'
+password = 'YOUR_PASSWORD'
+reset = true
+name = 'YOUR_DB_NAME'
