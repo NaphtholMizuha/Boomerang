@@ -1,79 +1,36 @@
-# FedDPR - Decentralized Private Robust Federated Learning System
+# Boomerang - Multi-server Private Robust Federated Learning System
 
 ## Introduction
 
-FedDPR is a decentralized, privacy-preserving, and robust federated learning framework. It provides:
+Boomerang is privacy-preserving and robust federated learning framework. It provides:
 
-- **Decentralized Architecture**: Peer-to-peer communication without central server
-- **Privacy Protection**: Differential privacy mechanisms
-- **Robustness**: Byzantine fault tolerance
+- **Multi-server Architecture**: Avoid single-point failure and poisoning
+- **Privacy Protection**: Support HE
+- **Robustness**: Filter malicious clients and servers
 - **Flexibility**: Support multiple datasets and models
 
-## Installation
-
-### Requirements
-- Python 3.8+
-- PyTorch 1.10+
-- SQLite3
-
-### Install dependencies
-```bash
-pip install -r requirements.txt
-```
 
 ## Configuration
 
-Edit `config/config.toml` to customize:
+Edit `sample_config.toml` to customize.
 
-- Network settings
-- Privacy parameters
-- Training hyperparameters
-- Dataset selection
 
 ## Database Setup
 
-Initialize database:
-```bash
-python db/create/record.sql
-python db/create/score.sql 
-python db/create/setting.sql
-```
+run all `.db` files in `./db` directory.
 
 
 ## Running the System
 
 Start training:
 ```bash
-python run.py --config config/config.yaml
+python run.py --config [your config]
 ```
 
 Batch training:
 ```bash
-python batch.py --config config/config.yaml
-```
+python batch.py
 
-Query results:
-```bash
-python query.py --config config/config.yaml
-```
-
-## Project Structure
-
-```
-FedDPR/
-├── algorithm/        # Core algorithms
-│   ├── base.py       # Base algorithm class
-│   ├── fl.py         # Federated learning implementations
-│   └── factory.py    # Algorithm factory
-├── peer/             # Node implementations
-│   ├── aggregator.py # Aggregator node
-│   └── learner.py    # Learner node
-├── training/         # Training framework
-│   ├── dataset/      # Dataset handlers
-│   ├── datasplitter/ # Data partitioning strategies
-│   └── model/        # Model implementations
-└── utils.py          # Utility functions
-```
 
 ## License
 
