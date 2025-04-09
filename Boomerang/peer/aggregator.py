@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from FedDPR.utils.btbcn import BinaryClusterTree
+from Boomerang.utils.btbcn import BinaryClusterTree
 
 def normalize(x: torch.Tensor):
     return x / torch.sum(x)

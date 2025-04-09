@@ -1,5 +1,5 @@
-from FedDPR.algorithm import Algorithm
-from FedDPR.config import toml2cfg
+from Boomerang.algorithm import Algorithm
+from Boomerang.config import toml2cfg
 import argparse
 
 def main():

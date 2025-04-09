@@ -1,12 +1,12 @@
-from FedDPR.config import Config
-from FedDPR.training import (
+from Boomerang.config import Config
+from Boomerang.training import (
     Trainer,
     fetch_dataset,
     fetch_datasplitter,
     fetch_model,
 )
 # from FedDPR.utils.timer import Timer
-from FedDPR.peer import Aggregator, Attacker
+from Boomerang.peer import Aggregator, Attacker
 from dataclasses import asdict
 import json
 import psycopg2
